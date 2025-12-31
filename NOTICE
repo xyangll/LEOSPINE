@@ -1,0 +1,132 @@
+# NOTICE - Third-Party Licenses and Attribution
+
+This project includes third-party software and resources. Below is a summary of their licenses and distribution terms.
+
+---
+
+## 1. CesiumJS (v1.135.0)
+
+**Location:** `app/web/libs/cesium/`  
+**License:** Apache License 2.0  
+**Copyright:** Copyright 2011-2025 CesiumJS Contributors  
+**Homepage:** https://cesium.com/cesiumjs/
+
+### Distribution Requirements:
+- ✅ Commercial use, modification, and distribution allowed
+- ⚠️ Must include copy of Apache 2.0 license
+- ⚠️ Must retain copyright and attribution notices
+- ⚠️ Modified files must carry prominent change notices
+
+### Included Third-Party Components:
+CesiumJS bundles many open-source libraries (MIT, BSD, Apache-2.0, ISC):
+- Knockout.js (MIT)
+- tween.js (MIT)
+- zip.js (BSD-3-Clause)
+- earcut (ISC)
+- kdbush, rbush (ISC/MIT)
+- pako (MIT)
+- protobuf (BSD-3-Clause)
+- basis_universal (Apache-2.0)
+- Draco (Apache-2.0)
+- DOMPurify (Apache-2.0 / MPL-2.0)
+- meshoptimizer (MIT)
+- URI.js (MIT)
+- jsep (MIT)
+- topojson-client (ISC)
+- See `app/web/libs/cesium/LICENSE.md` for full details
+
+### Cesium Ion Token Notice:
+⚠️ Using Cesium Ion services (terrain, imagery, geocoding) requires a personal token.  
+Do NOT commit your private `Cesium.Ion.defaultAccessToken` to public repositories.  
+Users must obtain their own token at https://cesium.com/ion/
+
+---
+
+## 2. Python Dependencies
+
+| Package      | License        | Notes                                      |
+|--------------|----------------|--------------------------------------------|
+| **PySide6**  | LGPL-3.0       | Qt bindings; dynamic linking = no copyleft |
+| **numpy**    | BSD-3-Clause   | Permissive                                 |
+| **scipy**    | BSD-3-Clause   | Permissive                                 |
+| **matplotlib** | PSF/BSD      | Permissive                                 |
+| **sgp4**     | MIT            | SGP4 satellite propagator                  |
+| **skyfield** | MIT            | High-precision astronomy library           |
+| **pandas**   | BSD-3-Clause   | Data analysis                              |
+| **scikit-learn** | BSD-3-Clause | Machine learning (DBSCAN clustering)      |
+| **tqdm**     | MIT / MPL-2.0  | Progress bars                              |
+
+All Python dependencies use permissive licenses compatible with MIT/Apache-2.0 distribution.
+
+---
+
+## 3. Image Assets
+
+**Location:** `app/web/assets/`
+
+| File                  | Likely Source         | License                |
+|-----------------------|-----------------------|------------------------|
+| `world.jpg`           | Natural Earth / NASA  | Public Domain          |
+| `8081_earthmap10k.jpg`| NASA Blue Marble      | Public Domain (NASA)   |
+| `875earth.jpg`        | NASA / public source  | Public Domain (NASA)   |
+
+### NASA Media Usage:
+NASA imagery is generally in the public domain. Per NASA guidelines:
+- NASA material is not protected by copyright unless otherwise noted
+- Use should not imply NASA endorsement
+- See: https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+### Natural Earth:
+- Free vector and raster map data
+- Public domain, no attribution required
+- See: https://www.naturalearthdata.com/about/terms-of-use/
+
+---
+
+## 4. TLE Data
+
+TLE (Two-Line Element) data included in `InputData/` may be sourced from:
+- **CelesTrak** (https://celestrak.org/) - Free for non-commercial use
+- **Space-Track** (https://www.space-track.org/) - Requires registration, usage terms apply
+
+⚠️ Before redistributing TLE data:
+- Verify you have rights to redistribute
+- Consider providing download scripts instead of bundled data
+- Check data provider's terms of service
+
+---
+
+## 5. Fonts and Icons
+
+- System fonts (SimHei, Microsoft YaHei) - System-provided, not redistributed
+- Emoji icons in UI - Unicode standard, no license required
+
+---
+
+## Summary of Compatibility
+
+| Component        | License       | MIT Compatible | Apache-2.0 Compatible |
+|------------------|---------------|----------------|----------------------|
+| This Project     | MIT           | ✅              | ✅                    |
+| CesiumJS         | Apache-2.0    | ✅              | ✅                    |
+| PySide6          | LGPL-3.0      | ✅ (dynamic)    | ✅ (dynamic)          |
+| Python Deps      | BSD/MIT       | ✅              | ✅                    |
+| NASA Imagery     | Public Domain | ✅              | ✅                    |
+
+---
+
+## Acknowledgments
+
+This project uses open-source software from many contributors. We thank:
+- The CesiumJS team at Cesium GS, Inc.
+- Brandon Rhodes for the Skyfield library
+- The SGP4 maintainers
+- The NumPy, SciPy, and Matplotlib communities
+- NASA for public domain Earth imagery
+
+---
+
+## Contact
+
+For license questions or concerns, please open an issue at:
+https://github.com/xyangll/LEOSPINE/issues

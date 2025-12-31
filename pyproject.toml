@@ -1,0 +1,128 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leo-spine"
+version = "1.0.0"
+description = "LEO-SPINE - Low Earth Orbit Satellite Positioning, Initialization & Navigation Estimation"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9,<3.14"
+authors = [
+    {name = "SPINE Contributors"}
+]
+keywords = [
+    "GNSS",
+    "GPS",
+    "satellite",
+    "navigation",
+    "positioning",
+    "simulation",
+    "LEO",
+    "constellation"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "PySide6>=6.6.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "sgp4>=2.22",
+    "skyfield>=1.46",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.2.0",
+    # Code Formatting
+    "black>=23.9.0",
+    "isort>=5.12.0",
+    # Linting
+    "flake8>=6.1.0",
+    "flake8-docstrings>=1.7.0",
+    # Type Checking
+    "mypy>=1.8.0",
+    # Build tools
+    "pyinstaller>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/xyangll/LEOSPINE"
+Documentation = "https://github.com/xyangll/LEOSPINE/tree/main/docs"
+Repository = "https://github.com/xyangll/LEOSPINE"
+Issues = "https://github.com/xyangll/LEOSPINE/issues"
+
+[project.scripts]
+spine = "main:main"
+spine-sim = "tools.sim_obs:main"
+spine-pos = "tools.run_positioning:main"
+
+[project.gui-scripts]
+spine-gui = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "app*", "tools*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.css", "*.html", "*.js", "*.png", "*.jpg", "*.svg"]
+
+[tool.black]
+line-length = 120
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | app/web/libs
+  | OutputData
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = [".git", ".venv", "__pycache__", "app/web/libs", "OutputData"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+exclude = [
+    "app/web/libs",
+    "OutputData",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

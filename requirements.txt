@@ -1,0 +1,21 @@
+# SPINE - LEO Simulation and Positioning
+# Core dependencies
+
+# GUI Framework
+PySide6>=6.6.0
+
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.10.0
+matplotlib>=3.7.0
+pandas>=2.0.0
+
+# Machine Learning (for DBSCAN clustering)
+scikit-learn>=1.3.0
+
+# Satellite Orbit Propagation
+sgp4>=2.22
+skyfield>=1.46
+
+# Utilities
+tqdm>=4.66.0

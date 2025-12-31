@@ -1,0 +1,260 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGL Orbit Viewer</title>
+  <script>
+    (function(){
+      function loadCss(href){
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = href;
+        l.crossOrigin = 'anonymous';
+        document.head.appendChild(l);
+      }
+      function loadScript(src, ok, fail){
+        var s = document.createElement('script');
+        s.src = src;
+        s.crossOrigin = 'anonymous';
+        s.onload = function(){ ok && ok(); };
+        s.onerror = function(){ fail && fail(); };
+        document.head.appendChild(s);
+      }
+      var localBase = 'libs/cesium/Build/Cesium';
+      window.CESIUM_BASE_URL = localBase;
+      loadCss(localBase + '/Widgets/widgets.css');
+      loadScript(localBase + '/Cesium.js', function(){ if(window.__startApp){ window.__startApp(); } }, function(){
+        var cdnBase = 'https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium';
+        loadCss(cdnBase + '/Widgets/widgets.css');
+        loadScript(cdnBase + '/Cesium.js', function(){ if(window.__startApp){ window.__startApp(); } });
+      });
+    })();
+  </script>
+  <style>
+    :root{--bg:#0f1115;--fg:#e6e6e6;--panel-bg:#12161c;--panel-border:#1d2026;--accent:#00c8ff}
+    html,body,#app{width:100%;height:100%;margin:0;overflow:hidden;background:radial-gradient(ellipse at top,var(--bg),#0a0c10);color:var(--fg)}
+    #sidebar{position:absolute;top:16px;left:16px;width:280px;background:rgba(18,22,28,0.9);backdrop-filter:blur(8px);border:1px solid var(--panel-border);border-radius:12px;padding:12px;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    #list{max-height:360px;overflow:auto}
+    .item{padding:8px 10px;border-bottom:1px solid #242a33;cursor:pointer;border-radius:8px;color:#cfd6e5}
+    .item:hover{background:#1a1f27;color:var(--fg);border-left:4px solid var(--accent)}
+    /* Control button area */
+    #controls{position:absolute;top:16px;right:16px;z-index:10;display:flex;flex-direction:column;gap:8px}
+    .ctrl-btn{background:rgba(18,22,28,0.9);backdrop-filter:blur(8px);border:1px solid var(--panel-border);border-radius:10px;padding:10px 16px;color:var(--fg);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;transition:all 0.2s ease;box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+    .ctrl-btn:hover{background:rgba(30,36,46,0.95);border-color:var(--accent);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,0.3)}
+    .ctrl-btn:active{transform:translateY(0)}
+    .ctrl-btn svg{width:18px;height:18px;fill:currentColor}
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="sidebar">
+    <div>Satellite List</div>
+    <div id="list"></div>
+  </div>
+  <!-- Control buttons -->
+  <div id="controls"></div>
+  <script>
+    function showMsg(text){
+      const list = document.getElementById('list');
+      const div = document.createElement('div');
+      div.className='item';
+      div.textContent = text;
+      list.appendChild(div);
+    }
+    function __initViewer(){
+      // Performance: prefer the small texture (875earth.jpg is only 43KB)
+      let imagery;
+      try {
+        imagery = new Cesium.SingleTileImageryProvider({
+          url: 'assets/world.jpg',  // Prefer the small texture for better performance
+          rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90)
+        });
+      } catch(err) {
+        try {
+          // Fallback: slightly larger texture
+          imagery = new Cesium.SingleTileImageryProvider({
+            url: 'assets/world.jpg',
+            rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90)
+          });
+        } catch(e) {
+          // Final fallback: online tiles
+          imagery = new Cesium.UrlTemplateImageryProvider({
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            credit: '© OpenStreetMap',
+            maximumLevel: 6  // Limit max level to reduce requests
+          });
+        }
+      }
+      const viewer = new Cesium.Viewer('app',{
+        timeline:true, animation:true, baseLayerPicker:false,
+        terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+        imageryProvider: imagery,
+        // === Performance tuning ===
+        shadows: false,                    // Disable shadows
+        skyBox: false,                     // Disable skybox
+        skyAtmosphere: false,              // Disable atmosphere
+        sceneModePicker: false,            // Disable scene mode picker
+        navigationHelpButton: false,       // Disable help button
+        homeButton: false,                 // Disable home button
+        geocoder: false,                   // Disable geocoder
+        fullscreenButton: false,           // Disable fullscreen button
+        infoBox: false,                    // Disable info box
+        selectionIndicator: false,         // Disable selection indicator
+        requestRenderMode: false,          // Continuous rendering for animation
+        maximumRenderTimeChange: Infinity
+      });
+      viewer.clock.multiplier = 60;  // Play at 60x speed
+      viewer.clock.shouldAnimate = true;  // Enable animation so satellites move
+      viewer.trackedEntity = undefined;
+      
+      // === Scene performance tuning ===
+      const scene = viewer.scene;
+      scene.globe.enableLighting = false;
+      scene.globe.showGroundAtmosphere = false;
+      scene.globe.maximumScreenSpaceError = 4;  // Higher tolerance, fewer tiles (default 2)
+      scene.fog.enabled = false;               // Disable fog
+      scene.fxaa = false;                      // Disable FXAA
+      scene.msaaSamples = 1;                   // Disable MSAA
+      scene.postProcessStages.fxaa.enabled = false;
+      scene.debugShowFramesPerSecond = false;  // FPS off (enable for debugging)
+      
+      // Limit max frame rate to reduce GPU usage
+      viewer.targetFrameRate = 30;
+      
+      // Block underground view
+      scene.screenSpaceCameraController.enableCollisionDetection = true;
+      
+      try{
+        viewer.imageryLayers.removeAll();
+        viewer.imageryLayers.addImageryProvider(imagery);
+      }catch(e){}
+      
+      // === Set initial view: space-down view of Earth ===
+      // Already centralized in resetCameraView; keeping here for clarity
+      
+      // Expose viewer globally (debug/extension)
+      window.__cesiumViewer = viewer;
+      
+      // Apply initial view (no animation)
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(105, 30, 25000000),
+        orientation: {
+          heading: 0.0,
+          pitch: Cesium.Math.toRadians(-90),
+          roll: 0.0
+        }
+      });
+      fetch('theme.json').then(r=>r.json()).then(t=>{
+        document.documentElement.style.setProperty('--accent', t.accent);
+        document.documentElement.style.setProperty('--panel-bg', t.panelBg);
+        document.documentElement.style.setProperty('--panel-border', t.panelBorder);
+        document.documentElement.style.setProperty('--fg', t.fg);
+        document.documentElement.style.setProperty('--bg', t.bg);
+      }).catch(()=>{});
+      // Read config with timestamp to avoid cache
+      fetch('config.json?ts=' + Date.now()).then(r=>r.json()).then(cfg=>{
+        if(cfg.useWorldTerrain && cfg.ionToken){
+          Cesium.Ion.defaultAccessToken = cfg.ionToken;
+          try{
+            viewer.terrainProvider = Cesium.createWorldTerrain();
+            viewer.imageryLayers.removeAll();
+            viewer.imageryLayers.addImageryProvider(new Cesium.IonImageryProvider({assetId: 2}));
+          }catch(e){
+            console.warn('Ion resource load failed, fallback to default imagery');
+          }
+        }
+        window.__webConfig = cfg; // Store config including durationSeconds/startIso
+      }).catch(()=>{});
+      // Load CZML with timestamp to avoid browser cache
+      const czmlUrl = 'data.czml?ts=' + Date.now();
+      fetch(czmlUrl).then(r=>{
+        if(!r.ok){ throw new Error('CZML load failed'); }
+        return r.json();
+      }).then(czml=>{
+        const ds = Cesium.CzmlDataSource.load(czml);
+        viewer.dataSources.add(ds).then(src=>{
+          viewer.clock.shouldAnimate = true;  // Keep animation enabled
+          // Skip auto zoomTo; preserve the initial space view
+          const list = document.getElementById('list');
+          const ents = src.entities.values.filter(e=>e.id!=='document');
+          if(ents.length===0){ showMsg('No orbit data (check TLE and time settings)'); }
+          ents.forEach(e=>{
+            const div = document.createElement('div');
+            div.className='item';
+            div.textContent = e.name || e.id;
+            div.onclick = ()=>{ try { viewer.flyTo(e); } catch(_) {} };
+            list.appendChild(div);
+          });
+
+          // === Force timeline to the CZML interval (fix the fixed-5400s issue) ===
+          try {
+            const docClock = Array.isArray(czml) && czml.length > 0 ? czml[0].clock : null;
+            if (docClock && docClock.interval) {
+              const interval = Cesium.TimeInterval.fromIso8601({ iso8601: docClock.interval });
+              const start = interval.start;
+              let stop = interval.stop;
+
+              // If config provides durationSeconds, extend the timeline
+              const cfg = window.__webConfig || {};
+              // URL query parameter dur has priority
+              const urlParams = new URLSearchParams(window.location.search);
+              const durParam = urlParams.get('dur');
+              let durationCfg = durParam ? Number(durParam) : null;
+              if (!durationCfg && cfg.durationSeconds) {
+                durationCfg = Number(cfg.durationSeconds);
+              }
+              if (durationCfg && durationCfg > 0) {
+                const desiredStop = Cesium.JulianDate.addSeconds(start, durationCfg, new Cesium.JulianDate());
+                if (Cesium.JulianDate.greaterThan(desiredStop, stop)) {
+                  stop = desiredStop;
+                }
+              }
+
+              viewer.clock.startTime = start.clone();
+              viewer.clock.stopTime = stop.clone();
+              viewer.clock.currentTime = start.clone();
+              viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
+              viewer.clock.multiplier = docClock.multiplier || 60;
+              if (viewer.timeline) {
+                viewer.timeline.zoomTo(start, stop);
+                // Trigger a render to update the timeline immediately
+                viewer.scene.requestRender();
+              }
+              viewer.scene.requestRender();
+              console.log('Clock interval applied (doc):', docClock.interval);
+              console.log('Clock interval final:', Cesium.JulianDate.toIso8601(start) + '/' + Cesium.JulianDate.toIso8601(stop));
+            } else {
+              console.warn('CZML clock interval missing');
+            }
+          } catch (err) {
+            console.warn('Apply clock interval failed:', err);
+          }
+        });
+      }).catch(err=>{
+        showMsg('Data not loaded: ' + err.message);
+      });
+    }
+    window.__startApp = function(){
+      if(typeof Cesium !== 'undefined'){
+        try{ __initViewer(); }catch(e){ showMsg('Init failed: '+e.message); }
+      }
+    };
+    if(typeof Cesium === 'undefined'){
+      var tries = 0;
+      var timer = setInterval(function(){
+        tries++;
+        if(typeof Cesium !== 'undefined'){
+          clearInterval(timer);
+          window.__startApp();
+        } else if(tries>20){
+          clearInterval(timer);
+          showMsg('Cesium not loaded (please place Cesium at app/web/libs/cesium/Build/Cesium)');
+        }
+      }, 250);
+    } else {
+      window.__startApp();
+    }
+  </script>
+</body>
+</html>
