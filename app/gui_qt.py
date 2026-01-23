@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QTabWidget, QVBoxLayout, 
     QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QComboBox, QDateTimeEdit,
     QRadioButton, QCheckBox, QGroupBox, QSizePolicy, QFrame, QSpacerItem, QScrollArea,
-    QProgressBar, QDialog, QDialogButtonBox)
+    QProgressBar, QDialog, QDialogButtonBox, QMessageBox)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import QUrl, Qt, QThread, Signal, QObject
 from PySide6.QtGui import QFont, QIcon, QPixmap
@@ -373,8 +373,8 @@ class ConstellationTab(QWidget):
         vis_tab_layout.setContentsMargins(4, 4, 4, 4)
         vis_tab_layout.setSpacing(4)
         
-        # Two matplotlib figures for visibility and PDOP
-        chart_bg = '#f5f5f7'
+        # Two matplotlib figures for visibility and PDOP (white background for publication)
+        chart_bg = '#ffffff'
         
         self.fig_visibility = Figure(figsize=(8, 4), facecolor=chart_bg)
         self.ax_visibility = self.fig_visibility.add_subplot(111)
@@ -386,6 +386,14 @@ class ConstellationTab(QWidget):
         
         vis_tab_layout.addWidget(self.canvas_visibility, 1)
         vis_tab_layout.addWidget(self.canvas_pdop, 1)
+        
+        # Save button row
+        save_vis_row = QHBoxLayout()
+        save_vis_row.addStretch()
+        self.btn_save_vis = QPushButton('💾 Save')
+        self.btn_save_vis.clicked.connect(self.save_visibility_plots)
+        save_vis_row.addWidget(self.btn_save_vis)
+        vis_tab_layout.addLayout(save_vis_row)
         
         right_tabs.addTab(vis_widget, '📊 Visibility Analysis')
         
@@ -689,6 +697,35 @@ class ConstellationTab(QWidget):
         
         self.fig_pdop.tight_layout()
         self.canvas_pdop.draw()
+
+    def save_visibility_plots(self):
+        """Save visibility analysis plots to files."""
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            'Save Visibility Plots',
+            'visibility_analysis.png',
+            filter='PNG Files (*.png);;All Files (*.*)'
+        )
+        if not path:
+            return
+        
+        base, ext = os.path.splitext(path)
+        if not ext:
+            ext = '.png'
+            path = base + ext
+        vis_path = f"{base}_visibility{ext}"
+        pdop_path = f"{base}_pdop{ext}"
+        
+        try:
+            self.fig_visibility.savefig(vis_path, dpi=300, bbox_inches='tight', facecolor='white')
+            self.fig_pdop.savefig(pdop_path, dpi=300, bbox_inches='tight', facecolor='white')
+            QMessageBox.information(
+                self,
+                'Save Success',
+                f'Saved figures to:\n{vis_path}\n{pdop_path}'
+            )
+        except Exception as e:
+            QMessageBox.warning(self, 'Save Failed', f'Save error:\n{str(e)}')
 
     def on_generate(self):
         a = float(self.a.text())
@@ -1184,8 +1221,8 @@ class SimulationTab(QWidget):
         right = QVBoxLayout()
         right.setSpacing(8)
         
-        # MacOS-style light gray background
-        chart_bg = '#f5f5f7'
+        # Chart background (use pure white for plotting area)
+        chart_bg = '#ffffff'
         axis_bg = '#ffffff'
         
         self.fig1 = Figure(figsize=(5, 3), facecolor=chart_bg)
@@ -1199,6 +1236,14 @@ class SimulationTab(QWidget):
         self.ax_dp.set_facecolor(axis_bg)
         self.canvas2 = FigureCanvasQTAgg(self.fig2)
         right.addWidget(self.canvas2)
+        
+        # Save chart button row
+        save_row = QHBoxLayout()
+        save_row.addStretch()
+        self.btn_save_plot = QPushButton('💾 Save')
+        self.btn_save_plot.clicked.connect(self.save_plots)
+        save_row.addWidget(self.btn_save_plot)
+        right.addLayout(save_row)
         
         # Initialize chart styles
         self._style_charts()
@@ -1392,17 +1437,55 @@ class SimulationTab(QWidget):
             pass
 
     def _style_charts(self):
-        """Apply macOS-style chart theme"""
-        for ax in [self.ax_pr, self.ax_dp]:
+        """Apply publication-style theme for simulation charts"""
+        for fig, ax, ylabel in [
+            (self.fig1, self.ax_pr, 'Pseudorange (m)'),
+            (self.fig2, self.ax_dp, 'Doppler (Hz)'),
+        ]:
             ax.set_facecolor('#ffffff')
-            ax.tick_params(colors='#333333', labelsize=9)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_color('#cccccc')
-            ax.spines['left'].set_color('#cccccc')
-            ax.grid(True, linestyle='--', alpha=0.3, color='#999999')
+            # Axis labels and ticks: larger for readability
+            ax.tick_params(axis='both', colors='#111111', labelsize=10, direction='in', length=4)
+            # Axis spine style
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(0.8)
+                spine.set_color('#444444')
+            ax.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
+            ax.set_ylabel(ylabel, fontsize=12, color='#111111')
+            ax.set_xlabel('Time (s)', fontsize=12, color='#111111')
+            # Tight layout for paper-style figure
+            fig.tight_layout()
         self.canvas1.draw()
         self.canvas2.draw()
+
+    def save_plots(self):
+        """Save current pseudorange和Doppler图像到文件"""
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            '保存图像',
+            'simulation_plots.png',
+            filter='PNG Files (*.png);;All Files (*.*)'
+        )
+        if not path:
+            return
+        
+        base, ext = os.path.splitext(path)
+        if not ext:
+            ext = '.png'
+            path = base + ext
+        pr_path = f"{base}_pseudorange{ext}"
+        dp_path = f"{base}_doppler{ext}"
+        
+        try:
+            self.fig1.savefig(pr_path, dpi=300, bbox_inches='tight')
+            self.fig2.savefig(dp_path, dpi=300, bbox_inches='tight')
+            QMessageBox.information(
+                self,
+                'Save Success',
+                f'Save figures to：\n{pr_path}\n{dp_path}'
+            )
+        except Exception as e:
+            QMessageBox.warning(self, 'Save Failed', f'Save figures error：\n{str(e)}')
 
     def run_sim(self):
         try:
@@ -1500,14 +1583,14 @@ class SimulationTab(QWidget):
                         if not s or not (s.startswith('OBS:') or s.startswith('BS:')):
                             continue
                         fields = [x for x in s.split() if x]
-                        if len(fields) < 12:
+                        if len(fields) < 9:
                             continue
                         try:
                             te = float(fields[2])
-                            pr = float(fields[4])
-                            dp = float(fields[5])
-                            ele = float(fields[10])
-                            prn = fields[11]
+                            pr = float(fields[5])
+                            dp = float(fields[6])
+                            ele = float(fields[8])
+                            prn = fields[9]
                         except Exception:
                             continue
                         times.setdefault(prn, []).append(te)
@@ -1525,33 +1608,83 @@ class SimulationTab(QWidget):
                         times.setdefault(prn, []).append(te)
                         pr_map.setdefault(prn, []).append(pr)
                         dp_map.setdefault(prn, []).append(dp)
+            
+            # Convert to relative time (starting from 0)
+            if times:
+                # Find the minimum time across all PRNs
+                all_times = [t for ts in times.values() for t in ts]
+                if all_times:
+                    t_start = min(all_times)
+                    # Convert each PRN's time list to relative time
+                    times_relative = {}
+                    for prn, ts in times.items():
+                        times_relative[prn] = [t - t_start for t in ts]
+                    times = times_relative
+            
+            # Use a small color cycle suitable for publications
+            color_cycle = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
+                           '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+            
+            # Pseudorange figure
             self.ax_pr.clear()
             self.ax_pr.set_facecolor('#ffffff')
-            for prn, ts in times.items():
-                self.ax_pr.plot(ts, pr_map.get(prn, []), label=f"PRN {prn}", linewidth=1.5)
-            self.ax_pr.set_ylabel('Pseudorange(m)', fontsize=10, color='#333333')
-            self.ax_pr.set_xlabel('Time(s)', fontsize=10, color='#333333')
-            self.ax_pr.legend(loc='upper right', fontsize=8, framealpha=0.9)
-            self.ax_pr.tick_params(colors='#333333', labelsize=9)
-            self.ax_pr.spines['top'].set_visible(False)
-            self.ax_pr.spines['right'].set_visible(False)
-            self.ax_pr.spines['bottom'].set_color('#cccccc')
-            self.ax_pr.spines['left'].set_color('#cccccc')
-            self.ax_pr.grid(True, linestyle='--', alpha=0.3, color='#999999')
+            for idx, (prn, ts) in enumerate(times.items()):
+                color = color_cycle[idx % len(color_cycle)]
+                self.ax_pr.plot(
+                    ts,
+                    pr_map.get(prn, []),
+                    label=f"PRN {prn}",
+                    linewidth=2.0,
+                    color=color,
+                )
+            self.ax_pr.set_ylabel('Pseudorange (m)', fontsize=12, color='#111111')
+            self.ax_pr.set_xlabel('Time (s)', fontsize=12, color='#111111')
+            leg1 = self.ax_pr.legend(
+                loc='upper right',
+                fontsize=9,
+                frameon=True,
+                framealpha=1.0,
+                edgecolor='#444444'
+            )
+            leg1.get_frame().set_linewidth(0.8)
+            self.ax_pr.tick_params(axis='both', colors='#111111', labelsize=10, direction='in', length=4)
+            for spine in self.ax_pr.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(0.8)
+                spine.set_color('#444444')
+            self.ax_pr.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
+            self.fig1.tight_layout()
             self.canvas1.draw()
+
+            # Doppler figure
             self.ax_dp.clear()
             self.ax_dp.set_facecolor('#ffffff')
-            for prn, ts in times.items():
-                self.ax_dp.plot(ts, dp_map.get(prn, []), label=f"PRN {prn}", linewidth=1.5)
-            self.ax_dp.set_ylabel('Doppler(Hz)', fontsize=10, color='#333333')
-            self.ax_dp.set_xlabel('Time(s)', fontsize=10, color='#333333')
-            self.ax_dp.legend(loc='upper right', fontsize=8, framealpha=0.9)
-            self.ax_dp.tick_params(colors='#333333', labelsize=9)
-            self.ax_dp.spines['top'].set_visible(False)
-            self.ax_dp.spines['right'].set_visible(False)
-            self.ax_dp.spines['bottom'].set_color('#cccccc')
-            self.ax_dp.spines['left'].set_color('#cccccc')
-            self.ax_dp.grid(True, linestyle='--', alpha=0.3, color='#999999')
+            for idx, (prn, ts) in enumerate(times.items()):
+                color = color_cycle[idx % len(color_cycle)]
+                self.ax_dp.plot(
+                    ts,
+                    dp_map.get(prn, []),
+                    label=f"PRN {prn}",
+                    linewidth=2.0,
+                    color=color,
+                )
+            self.ax_dp.set_ylabel('Doppler (Hz)', fontsize=12, color='#111111')
+            self.ax_dp.set_xlabel('Time (s)', fontsize=12, color='#111111')
+            leg2 = self.ax_dp.legend(
+                loc='upper right',
+                fontsize=9,
+                frameon=True,
+                framealpha=1.0,
+                edgecolor='#444444'
+            )
+            leg2.get_frame().set_linewidth(0.8)
+            self.ax_dp.tick_params(axis='both', colors='#111111', labelsize=10, direction='in', length=4)
+            for spine in self.ax_dp.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(0.8)
+                spine.set_color('#444444')
+            self.ax_dp.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
+            self.fig2.tight_layout()
             self.canvas2.draw()
         except Exception:
             pass
@@ -1918,12 +2051,16 @@ class PositioningTab(QWidget):
         # Row 1: Sky plot | Residuals
         # Row 2: Positioning error / convergence (spans 2 columns)
         right_container = QWidget()
-        right_panel = QGridLayout(right_container)
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setSpacing(8)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        
+        right_panel = QGridLayout()
         right_panel.setSpacing(10)
         right_panel.setContentsMargins(0, 0, 0, 0)
         
-        # MacOS-style light gray background
-        chart_bg = '#f5f5f7'
+        # Chart background (use pure white for plotting area)
+        chart_bg = '#ffffff'
         axis_bg = '#ffffff'
         
         # Sky plot: satellite azimuth/elevation relative to station
@@ -1943,6 +2080,7 @@ class PositioningTab(QWidget):
         self.fig_conv = Figure(figsize=(6, 5), facecolor=chart_bg)
         self.ax_conv = self.fig_conv.add_subplot(111)
         self.ax_conv.set_facecolor(axis_bg)
+        self.ax_conv2 = None  # Twin axis for positioning error (created dynamically)
         self.canvas_conv = FigureCanvasQTAgg(self.fig_conv)
         self.canvas_conv.setMinimumHeight(320)
 
@@ -1963,6 +2101,16 @@ class PositioningTab(QWidget):
         self._style_chart()
         self._style_skyplot()
         self._style_residuals()
+        
+        # Save chart buttons
+        save_row = QHBoxLayout()
+        save_row.addStretch()
+        self.btn_save_pos_plot = QPushButton('💾 Save')
+        self.btn_save_pos_plot.clicked.connect(self.save_pos_plots)
+        save_row.addWidget(self.btn_save_pos_plot)
+        
+        right_layout.addLayout(right_panel)
+        right_layout.addLayout(save_row)
         
         main_layout.addWidget(left_panel, 1)
         main_layout.addWidget(right_container, 2)
@@ -2086,35 +2234,77 @@ class PositioningTab(QWidget):
             return None
 
     def _style_chart(self):
-        """Initialize convergence chart style"""
+        """Initialize convergence chart style (publication-style)."""
+        # Remove existing twin axis if present
+        if self.ax_conv2 is not None:
+            self.ax_conv2.remove()
+            self.ax_conv2 = None
+        
         ax = self.ax_conv
+        ax.clear()
         ax.set_facecolor('#ffffff')
-        ax.set_title('Positioning Convergence & Error', fontsize=11, color='#1f2937', fontweight='bold', pad=12)
-        ax.set_xlabel('Iteration Step', fontsize=9, color='#4b5563')
-        ax.set_ylabel('Position Std (m)', fontsize=9, color='#2563eb')
-        ax.tick_params(colors='#4b5563', labelsize=8)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('#e5e7eb')
-        ax.spines['left'].set_color('#e5e7eb')
-        ax.grid(True, linestyle=':', alpha=0.4, color='#9ca3af')
+        ax.set_title(
+            'Positioning Convergence & Error',
+            fontsize=13,
+            color='#111111',
+            fontweight='bold',
+            pad=12,
+        )
+        ax.set_xlabel('Observation Count', fontsize=12, color='#111111')
+        ax.set_ylabel('Position Std (m)', fontsize=12, color='#1f77b4')
+        ax.tick_params(
+            axis='both',
+            colors='#111111',
+            labelsize=10,
+            direction='in',
+            length=4,
+        )
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_linewidth(0.8)
+            spine.set_color('#444444')
+        ax.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
         self.fig_conv.tight_layout()
         self.canvas_conv.draw()
 
     def _style_skyplot(self):
-        """Initialize sky plot style"""
+        """Initialize sky plot style (publication-style, no title)."""
         ax = self.ax_sky
         ax.clear()
         ax.set_facecolor('#ffffff')
         ax.set_theta_zero_location('N')
         ax.set_theta_direction(-1)
         ax.set_ylim(0, 90)
+        
+        # Set elevation ticks (note: r=0 is zenith=90°, r=90 is horizon=0°)
         ax.set_yticks([0, 30, 60, 90])
-        ax.set_yticklabels(['90°', '60°', '30°', '0°'], fontsize=8, color='#6b7280')
+        ax.set_yticklabels(['90°', '60°', '30°', '0°'], fontsize=11, color='#222222', fontweight='medium')
+        
+        # Set azimuth ticks
         ax.set_xticks(np.deg2rad([0, 45, 90, 135, 180, 225, 270, 315]))
-        ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], fontsize=8, color='#6b7280')
-        ax.set_title('Satellite Sky Plot (Az/El)', fontsize=11, color='#1f2937', fontweight='bold', pad=12)
-        ax.grid(True, linestyle=':', alpha=0.4, color='#9ca3af')
+        ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], fontsize=11, color='#222222', fontweight='medium')
+        
+        # No title (remove overlap issue)
+        ax.set_title('')
+        
+        # Disable default grid
+        ax.grid(False)
+        
+        # Manually draw circles: inner circles very light gray dashed, outer circle solid black
+        theta_full = np.linspace(0, 2 * np.pi, 360)
+        # Inner circles at 30° and 60° elevation (r=60 and r=30 in plot coords) - very light
+        for r_val in [30, 60]:
+            ax.plot(theta_full, np.full_like(theta_full, r_val), 
+                    linestyle='--', linewidth=0.6, color='#999999', alpha=0.8)
+        # Outer circle at horizon (r=90) - bold black
+        ax.plot(theta_full, np.full_like(theta_full, 90), 
+                linestyle='-', linewidth=1.5, color='#000000')
+        # Center point circle (zenith, r=0) - small light dot
+        ax.plot(0, 0, 'o', markersize=2, color='#999999')
+        
+        # Radial lines (azimuth directions) - only major directions (N/E/S/W), very light
+        for angle in np.deg2rad([0, 90, 180, 270]):
+            ax.plot([angle, angle], [0, 90], linestyle=':', linewidth=0.5, color='#999999', alpha=0.6)
         
         # Remove polar spine
         ax.spines['polar'].set_visible(False)
@@ -2123,7 +2313,7 @@ class PositioningTab(QWidget):
         self.canvas_sky.draw()
 
     def _style_residuals(self):
-        """Initialize residual chart style"""
+        """Initialize residual chart style (publication-style)."""
         ax = self.ax_res
         ax2 = self.ax_res2
 
@@ -2131,41 +2321,76 @@ class PositioningTab(QWidget):
         ax2.clear()
 
         ax.set_facecolor('#ffffff')
-        ax.grid(True, linestyle=':', alpha=0.4, color='#9ca3af')
-        
+        ax.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
+
         # Left Y axis (Pseudorange) - blue ticks and label
-        ax.tick_params(axis='x', colors='#4b5563', labelsize=8)
-        ax.tick_params(axis='y', colors='#2563eb', labelsize=8)
+        ax.tick_params(axis='x', colors='#111111', labelsize=10, direction='in', length=4)
+        ax.tick_params(axis='y', colors='#1f77b4', labelsize=10, direction='in', length=4)
         ax.yaxis.set_label_position('left')
         ax.yaxis.tick_left()
-        ax.set_ylabel('Pseudorange (m)', fontsize=9, color='#2563eb')
-        
+        ax.set_ylabel('Pseudorange (m)', fontsize=12, color='#1f77b4')
+
         # Show left and bottom spines
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_visible(True)
-        ax.spines['bottom'].set_color('#e5e7eb')
-        ax.spines['left'].set_visible(True)
-        ax.spines['left'].set_color('#2563eb')
+        for spine_name, spine in ax.spines.items():
+            spine.set_visible(True)
+            spine.set_linewidth(0.8)
+            spine.set_color('#444444' if spine_name != 'left' else '#1f77b4')
 
         # Right Y axis (Doppler) - red ticks and label
-        ax2.tick_params(axis='y', colors='#dc2626', labelsize=8)
+        ax2.tick_params(axis='y', colors='#d62728', labelsize=10, direction='in', length=4)
         ax2.yaxis.set_label_position('right')
         ax2.yaxis.tick_right()
-        ax2.set_ylabel('Doppler (Hz)', fontsize=9, color='#dc2626')
-        
+        ax2.set_ylabel('Doppler (Hz)', fontsize=12, color='#d62728')
+
         # Show right spine for ax2
         ax2.spines['top'].set_visible(False)
         ax2.spines['left'].set_visible(False)
         ax2.spines['bottom'].set_visible(False)
         ax2.spines['right'].set_visible(True)
-        ax2.spines['right'].set_color('#dc2626')
+        ax2.spines['right'].set_color('#d62728')
 
-        ax.set_title('Residuals per Epoch', fontsize=11, color='#1f2937', fontweight='bold', pad=12)
-        ax.set_xlabel('Time (s)', fontsize=9, color='#4b5563')
-        
+        ax.set_title(
+            'Residuals per Epoch',
+            fontsize=13,
+            color='#111111',
+            fontweight='bold',
+            pad=12,
+        )
+        ax.set_xlabel('Time (s)', fontsize=12, color='#111111')
+
         self.fig_res.tight_layout()
         self.canvas_res.draw()
+
+    def save_pos_plots(self):
+        """保存定位页面的图像（天空图、残差、收敛曲线）"""
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            '保存图像',
+            'positioning_plots.png',
+            filter='PNG Files (*.png);;All Files (*.*)'
+        )
+        if not path:
+            return
+        
+        base, ext = os.path.splitext(path)
+        if not ext:
+            ext = '.png'
+            path = base + ext
+        sky_path = f"{base}_skyplot{ext}"
+        res_path = f"{base}_residuals{ext}"
+        conv_path = f"{base}_convergence{ext}"
+        
+        try:
+            self.fig_sky.savefig(sky_path, dpi=300, bbox_inches='tight')
+            self.fig_res.savefig(res_path, dpi=300, bbox_inches='tight')
+            self.fig_conv.savefig(conv_path, dpi=300, bbox_inches='tight')
+            QMessageBox.information(
+                self,
+                '保存成功',
+                f'已保存图像：\n{sky_path}\n{res_path}\n{conv_path}'
+            )
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'保存图像时出错：\n{str(e)}')
 
     def _plot_skyplot(self, results):
         """Render skyplot on the right panel (best-effort)."""
@@ -2176,8 +2401,16 @@ class PositioningTab(QWidget):
         ax = self.ax_sky
 
         if not sky:
-            ax.text(0.5, 0.5, 'No skyplot data', transform=ax.transAxes,
-                    ha='center', va='center', fontsize=9, color='#9ca3af')
+            ax.text(
+                0.5,
+                0.5,
+                'No skyplot data',
+                transform=ax.transAxes,
+                ha='center',
+                va='center',
+                fontsize=11,
+                color='#9ca3af',
+            )
             self.canvas_sky.draw()
             return
 
@@ -2204,37 +2437,96 @@ class PositioningTab(QWidget):
             if len(az_rad) == 0:
                 raise ValueError("no valid skyplot points")
 
+            # Bright, high-contrast color palette for satellite tracks
+            bright_colors = ['#FF6600', '#00AA44', '#DD0000', '#8833CC',
+                             '#AA5500', '#CC0088', '#006666', '#AAAA00', '#0099CC',
+                             '#6644AA', '#CC6600','#0066CC']
+            
             # Prefer grouping by PRN if available; otherwise color by time
             if prn is not None and len(prn) == len(r) and len(prn) > 0:
                 uniq = np.unique(prn)
-                # Use a pleasant qualitative colormap
-                cmap = plt.get_cmap('Set2')
                 for i, p in enumerate(uniq[:12]):  # cap legend clutter
                     idx = prn == p
-                    # Cycle through colors
-                    color = cmap(i % 8)
-                    ax.plot(az_rad[idx], r[idx], '-', linewidth=1.5, alpha=0.6, color=color)
-                    ax.scatter(az_rad[idx], r[idx], s=16, alpha=0.9, color=color, edgecolors='white', linewidth=0.5, label=f'{int(p):02d}')
+                    color = bright_colors[i % len(bright_colors)]
+                    # Get the data points for this satellite
+                    sat_az = az_rad[idx]
+                    sat_r = r[idx]
+                    # Draw satellite track with very thick, solid line (higher zorder to be above grid)
+                    ax.plot(sat_az, sat_r, '-', linewidth=2.0, alpha=1.0, color=color, zorder=10, solid_capstyle='round', solid_joinstyle='round')
+                    # Draw scatter points along track - subsample to reduce clutter
+                    # Only show every 5th point or if there are few points, show all
+                    step = max(1, len(sat_az) // 10)  # Show ~10 points per track
+                    ax.scatter(
+                        sat_az[::step],
+                        sat_r[::step],
+                        s=60,
+                        alpha=1.0,
+                        color=color,
+                        edgecolors='white',
+                        linewidth=1.2,
+                        label=f'{int(p):02d}',
+                        zorder=15,
+                    )
                 
+                # Legend outside plot area
                 if len(uniq) <= 12:
-                    leg = ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=8, frameon=True, framealpha=0.9)
-                    leg.get_frame().set_linewidth(0.0)
+                    leg = ax.legend(
+                        loc='upper left',
+                        bbox_to_anchor=(1.02, 1.0),
+                        fontsize=10,
+                        frameon=True,
+                        framealpha=1.0,
+                        facecolor='white',
+                        edgecolor='#333333',
+                        title='PRN',
+                        title_fontsize=10,
+                    )
+                    leg.get_frame().set_linewidth(0.8)
             else:
                 c = t if len(t) == len(r) else None
-                sc = ax.scatter(az_rad, r, c=c, s=16, cmap='viridis', alpha=0.8, edgecolors='none')
+                sc = ax.scatter(az_rad, r, c=c, s=50, cmap='viridis', alpha=1.0, edgecolors='white', linewidths=0.8)
                 if c is not None and len(t) > 0:
                     cbar = self.fig_sky.colorbar(sc, ax=ax, pad=0.1, shrink=0.7)
-                    cbar.set_label('Time (s)', fontsize=8, color='#4b5563')
-                    cbar.ax.tick_params(labelsize=8, colors='#4b5563')
-                    cbar.outline.set_visible(False)
+                    cbar.set_label('Time (s)', fontsize=11, color='#222222')
+                    cbar.ax.tick_params(labelsize=10, colors='#222222')
+                    cbar.outline.set_linewidth(0.8)
+                    cbar.outline.set_edgecolor('#333333')
 
-            # Start/end markers with modern colors
-            ax.plot(az_rad[0], r[0], marker='o', markersize=6, color='#10b981', markeredgecolor='white', markeredgewidth=1.5, zorder=10)
-            ax.plot(az_rad[-1], r[-1], marker='s', markersize=6, color='#ef4444', markeredgecolor='white', markeredgewidth=1.5, zorder=10)
+            # Start marker (green circle) and end marker (red square) - on top of everything
+            ax.plot(
+                az_rad[0],
+                r[0],
+                marker='o',
+                markersize=8,
+                color='#22c55e',
+                markeredgecolor='#ffffff',
+                markeredgewidth=2.5,
+                zorder=20,
+                label='Start',
+            )
+            ax.plot(
+                az_rad[-1],
+                r[-1],
+                marker='s',
+                markersize=6,
+                color='#ef4444',
+                markeredgecolor='#ffffff',
+                markeredgewidth=2.5,
+                zorder=20,
+                label='End',
+            )
             
         except Exception:
-            ax.text(0.5, 0.5, 'Failed to render skyplot', transform=ax.transAxes,
-                    ha='center', va='center', fontsize=9, color='#ef4444')
+            ax.text(
+                0.5,
+                0.5,
+                'Failed to render skyplot',
+                transform=ax.transAxes,
+                ha='center',
+                va='center',
+                fontsize=11,
+                color='#ef4444',
+            )
 
         self.fig_sky.tight_layout()
         self.canvas_sky.draw()
@@ -2247,8 +2539,16 @@ class PositioningTab(QWidget):
         ax2 = self.ax_res2
 
         if not res:
-            ax.text(0.5, 0.5, 'No residual data', transform=ax.transAxes,
-                    ha='center', va='center', fontsize=9, color='#9ca3af')
+            ax.text(
+                0.5,
+                0.5,
+                'No residual data',
+                transform=ax.transAxes,
+                ha='center',
+                va='center',
+                fontsize=11,
+                color='#9ca3af',
+            )
             self.canvas_res.draw()
             return
 
@@ -2258,47 +2558,123 @@ class PositioningTab(QWidget):
             dop = res.get('doppler_hz', None)
 
             # Zero lines
-            ax.axhline(0, color='#9ca3af', linestyle='--', linewidth=1, alpha=0.5)
+            ax.axhline(0, color='#9ca3af', linestyle='--', linewidth=1.0, alpha=0.6)
 
             rms_lines = []
 
             if pr is not None:
                 pr = np.asarray(pr, dtype=float)
                 if len(t) == len(pr) and len(t) > 0:
-                    ax.plot(t, pr, 'o', markersize=3, color='#2563eb', alpha=0.6, markeredgewidth=0, label='Pseudorange')
+                    ax.plot(
+                        t,
+                        pr,
+                        'o',
+                        markersize=4,
+                        color='#1f77b4',
+                        alpha=0.7,
+                        markeredgewidth=0,
+                        label='Pseudorange',
+                    )
                     rms = float(np.sqrt(np.nanmean(pr * pr)))
                     rms_lines.append(f"PR RMS: {rms:.3f} m")
                 else:
-                    ax.text(0.02, 0.90, 'Pseudorange unavailable', transform=ax.transAxes, fontsize=8, color='#9ca3af')
+                    ax.text(
+                        0.02,
+                        0.90,
+                        'Pseudorange unavailable',
+                        transform=ax.transAxes,
+                        fontsize=9,
+                        color='#9ca3af',
+                    )
             else:
-                ax.text(0.02, 0.90, 'Pseudorange unused', transform=ax.transAxes, fontsize=8, color='#9ca3af')
+                ax.text(
+                    0.02,
+                    0.90,
+                    'Pseudorange unused',
+                    transform=ax.transAxes,
+                    fontsize=9,
+                    color='#9ca3af',
+                )
 
             if dop is not None:
                 dop = np.asarray(dop, dtype=float)
                 if len(t) == len(dop) and len(t) > 0:
-                    ax2.plot(t, dop, 'o', markersize=3, color='#dc2626', alpha=0.6, markeredgewidth=0, label='Doppler')
+                    ax2.plot(
+                        t,
+                        dop,
+                        'o',
+                        markersize=4,
+                        color='#d62728',
+                        alpha=0.7,
+                        markeredgewidth=0,
+                        label='Doppler',
+                    )
                     rms = float(np.sqrt(np.nanmean(dop * dop)))
                     rms_lines.append(f"Dop RMS: {rms:.3f} Hz")
                 else:
-                    ax.text(0.02, 0.82, 'Doppler unavailable', transform=ax.transAxes, fontsize=8, color='#9ca3af')
+                    ax.text(
+                        0.02,
+                        0.82,
+                        'Doppler unavailable',
+                        transform=ax.transAxes,
+                        fontsize=9,
+                        color='#9ca3af',
+                    )
             else:
-                ax.text(0.02, 0.82, 'Doppler unused', transform=ax.transAxes, fontsize=8, color='#9ca3af')
+                ax.text(
+                    0.02,
+                    0.82,
+                    'Doppler unused',
+                    transform=ax.transAxes,
+                    fontsize=9,
+                    color='#9ca3af',
+                )
 
             # Combined legend
             h1, l1 = ax.get_legend_handles_labels()
             h2, l2 = ax2.get_legend_handles_labels()
             if h1 or h2:
-                leg = ax.legend(h1 + h2, l1 + l2, loc='upper right', fontsize=8, frameon=True, framealpha=0.95, facecolor='white')
-                leg.get_frame().set_linewidth(0.0)
+                leg = ax.legend(
+                    h1 + h2,
+                    l1 + l2,
+                    loc='upper right',
+                    fontsize=9,
+                    frameon=True,
+                    framealpha=0.95,
+                    facecolor='white',
+                    edgecolor='#444444',
+                )
+                leg.get_frame().set_linewidth(0.8)
 
             # RMS summary box
             if rms_lines:
-                ax.text(0.02, 0.02, "\n".join(rms_lines), transform=ax.transAxes,
-                        ha='left', va='bottom', fontsize=8, color='#374151',
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='#f3f4f6', alpha=0.9, edgecolor='none'))
+                ax.text(
+                    0.02,
+                    0.02,
+                    "\n".join(rms_lines),
+                    transform=ax.transAxes,
+                    ha='left',
+                    va='bottom',
+                    fontsize=9,
+                    color='#374151',
+                    bbox=dict(
+                        boxstyle='round,pad=0.3',
+                        facecolor='#f3f4f6',
+                        alpha=0.9,
+                        edgecolor='none',
+                    ),
+                )
         except Exception:
-            ax.text(0.5, 0.5, 'Failed to render residuals', transform=ax.transAxes,
-                    ha='center', va='center', fontsize=9, color='#ef4444')
+            ax.text(
+                0.5,
+                0.5,
+                'Failed to render residuals',
+                transform=ax.transAxes,
+                ha='center',
+                va='center',
+                fontsize=11,
+                color='#ef4444',
+            )
 
         self.fig_res.tight_layout()
         self.canvas_res.draw()
@@ -2332,9 +2708,9 @@ class PositioningTab(QWidget):
                         if not line or not (line.startswith('OBS:') or line.startswith('BS:')):
                             continue
                         fields = line.split()
-                        if len(fields) >= 12:
+                        if len(fields) >= 10:
                             try:
-                                prn = fields[11]  # PRN is in field 11
+                                prn = fields[9]  # PRN is in field 9
                                 prns.add(prn)
                             except:
                                 pass
@@ -2371,6 +2747,12 @@ class PositioningTab(QWidget):
         for i in range(self.pos_sat_list.count()):
             self.pos_sat_list.item(i).setSelected(False)
     
+    def _reset_pos_plots(self):
+        """Clear positioning charts before a new run."""
+        self._style_chart()
+        self._style_skyplot()
+        self._style_residuals()
+
     def _get_pos_selected_prns(self):
         """Get list of selected satellite PRNs for positioning."""
         selected = []
@@ -2433,6 +2815,8 @@ class PositioningTab(QWidget):
         self.status_label.setText('Initializing...')
         self.runbtn.setText('⏹ Cancel')
         self.runbtn.setEnabled(True)
+        # Clear previous plots
+        self._reset_pos_plots()
         
         # Get selected satellites for positioning
         selected_prns = self._get_pos_selected_prns()
@@ -2517,17 +2901,25 @@ class PositioningTab(QWidget):
         
         if len(obs_count) > 0 and len(position_std) > 0:
             # Plot position STD convergence
-            color1 = '#3b82f6'
-            ax.plot(obs_count, position_std, 'o-', color=color1, 
-                    linewidth=2, markersize=4, label='Position Std (m)')
+            color1 = '#1f77b4'
+            ax.plot(
+                obs_count,
+                position_std,
+                'o-',
+                color=color1,
+                linewidth=2.0,
+                markersize=4.5,
+                label='Position Std (m)',
+            )
             ax.set_ylim([0, 1000])
-            ax.set_xlabel('Observation Count', fontsize=11, color='#333333')
-            ax.set_ylabel('Position Std (m)', fontsize=11, color=color1)
+            ax.set_xlabel('Observation Count', fontsize=12, color='#111111')
+            ax.set_ylabel('Position Std (m)', fontsize=12, color=color1)
             ax.tick_params(axis='y', labelcolor=color1)
             
             # Secondary Y-axis for absolute position error
-            ax2 = ax.twinx()
-            color2 = '#ef4444'
+            self.ax_conv2 = ax.twinx()
+            ax2 = self.ax_conv2
+            color2 = '#d62728'
             
             # Compute absolute position error
             absolute_errors = []
@@ -2542,31 +2934,56 @@ class PositioningTab(QWidget):
                         absolute_errors.append(np.nan)
             
             if len(absolute_errors) > 0 and len(absolute_errors) == len(obs_count):
-                ax2.plot(obs_count, absolute_errors, 's--', color=color2,
-                         linewidth=1.5, markersize=3, alpha=0.7, label='Positioning Error (m)')
-                ax2.set_ylabel('Positioning Error (m)', fontsize=11, color=color2)
+                ax2.plot(
+                    obs_count,
+                    absolute_errors,
+                    's--',
+                    color=color2,
+                    linewidth=1.6,
+                    markersize=4,
+                    alpha=0.8,
+                    label='Positioning Error (m)',
+                )
+                ax2.set_ylabel('Positioning Error (m)', fontsize=12, color=color2)
                 
                 # Set Y-axis range
                 valid_errors = [e for e in absolute_errors if not np.isnan(e)]
                 if valid_errors:
                     max_error = max(valid_errors)
-                    ax2.set_ylim([0, min(max_error * 1.2, 5000)])
+                    ax2.set_ylim([0, min(max_error * 1.2, 1000)])
             elif len(residual_rms) > 0:
                 # If no true position, show residual RMS
-                ax2.plot(obs_count, residual_rms, 's--', color=color2,
-                         linewidth=1.5, markersize=3, alpha=0.7, label='Residual RMS')
-                ax2.set_ylabel('Residual RMS', fontsize=11, color=color2)
+                ax2.plot(
+                    obs_count,
+                    residual_rms,
+                    's--',
+                    color=color2,
+                    linewidth=1.6,
+                    markersize=4,
+                    alpha=0.8,
+                    label='Residual RMS',
+                )
+                ax2.set_ylabel('Residual RMS', fontsize=12, color=color2)
             
-            ax2.tick_params(axis='y', labelcolor=color2)
+            ax2.tick_params(axis='y', labelcolor=color2, labelsize=10, direction='in', length=4)
             ax2.spines['right'].set_color(color2)
             
             # Style settings
-            ax.set_title('Positioning Convergence', fontsize=12, color='#333333', fontweight='bold', pad=10)
-            ax.tick_params(colors='#333333', labelsize=9)
-            ax.spines['top'].set_visible(False)
-            ax.spines['bottom'].set_color('#cccccc')
+            ax.set_title(
+                'Positioning Convergence',
+                fontsize=13,
+                color='#111111',
+                fontweight='bold',
+                pad=10,
+            )
+            ax.tick_params(axis='x', colors='#111111', labelsize=10, direction='in', length=4)
+            ax.tick_params(axis='y', colors=color1, labelsize=10, direction='in', length=4)
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(0.8)
+                spine.set_color('#444444')
             ax.spines['left'].set_color(color1)
-            ax.grid(True, linestyle='--', alpha=0.3, color='#999999')
+            ax.grid(True, linestyle=':', alpha=0.4, color='#bbbbbb')
             
             # Add final result text
             if results:
@@ -2582,14 +2999,36 @@ class PositioningTab(QWidget):
                         final_error = valid_errors[-1]
                         final_text += f"\nAbs Err: {final_error:.2f} m"
                 
-                ax.text(0.02, 0.98, final_text, transform=ax.transAxes, fontsize=9,
-                        verticalalignment='top', color='#333333',
-                        bbox=dict(boxstyle='round', facecolor='#f0f4f8', alpha=0.8, edgecolor='#cccccc'))
+                ax.text(
+                    0.02,
+                    0.98,
+                    final_text,
+                    transform=ax.transAxes,
+                    fontsize=10,
+                    verticalalignment='top',
+                    color='#333333',
+                    bbox=dict(
+                        boxstyle='round',
+                        facecolor='#f0f4f8',
+                        alpha=0.85,
+                        edgecolor='#cccccc',
+                    ),
+                )
             
             # Add legend
             lines1, labels1 = ax.get_legend_handles_labels()
             lines2, labels2 = ax2.get_legend_handles_labels()
-            ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right', fontsize=8)
+            leg = ax.legend(
+                lines1 + lines2,
+                labels1 + labels2,
+                loc='upper right',
+                fontsize=9,
+                frameon=True,
+                framealpha=0.95,
+                facecolor='white',
+                edgecolor='#444444',
+            )
+            leg.get_frame().set_linewidth(0.8)
         
         self.fig_conv.tight_layout()
         self.canvas_conv.draw()

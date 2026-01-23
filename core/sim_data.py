@@ -1895,11 +1895,11 @@ def main_sim(sim, week, start_time, end_time, step_s, elev_mask_deg, output_file
                         
                         # Writedataline
                         f.write(f"OBS: 1  {observations['emission_time']:.9f}    "
+                                f"{week:.2f}      "
                                 f"{gps_time:.9f}      "
                                 f"{observations['pseudorange']:.2f}    "
                                 f"{observations['doppler']:.5f}    "
                                 f"{observations['snr']:.1f}   "
-                                f"6   1    1   "
                                 f"{observations['elevation']:.2f}  "
                                 f"{sat['prn']}\n")
                 except Exception as e:

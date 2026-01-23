@@ -344,7 +344,7 @@ class SingleSatDopplerPositioning:
         self.DBSCAN_result = False
         self.use_DBSCAN = True
     
-    def batch_least_squares_position_only(self, times, prnlist, ephemeris, doppler_obs, subset_snr, init_pos=None):
+    def batch_least_squares_position_only(self, times, week, prnlist, ephemeris, doppler_obs, subset_snr, init_pos=None):
         """Estimate receiver position via batch least squares (Doppler only)"""
         # Get initial state
         current_state = np.zeros(4)
@@ -376,7 +376,7 @@ class SingleSatDopplerPositioning:
             # Soft-constrained positioning
             if self.height_constraint_mode in ['soft', 'both']:
                 soft_result = self._batch_lsq_with_soft_constraint(
-                    times,prnlist, ephemeris, doppler_obs, subset_snr,
+                    times, week, prnlist, ephemeris, doppler_obs, subset_snr,
                     current_state.copy(), init_h
                 )
                 
@@ -387,14 +387,14 @@ class SingleSatDopplerPositioning:
         else:
             # Unconstrained positioning
             none_constraint_result = self._batch_lsq_with_soft_constraint(
-                    times,prnlist, ephemeris, doppler_obs,  subset_snr,
+                    times, week, prnlist, ephemeris, doppler_obs,  subset_snr,
                     current_state.copy(), init_h
                 )
             return none_constraint_result
 
     
     
-    def _batch_lsq_with_soft_constraint(self, times,prnlist, ephemeris, doppler_obs, subset_snr, initial_state, init_h):
+    def _batch_lsq_with_soft_constraint(self, times, week, prnlist, ephemeris, doppler_obs, subset_snr, initial_state, init_h):
         """Least squares with soft height constraint"""
         if self.height_constraint is not None:
             print("\nSoft-constrained positioning...")
@@ -415,7 +415,7 @@ class SingleSatDopplerPositioning:
                 clock_drift = state[3]  # clock drift (Hz)
                 
                 # Doppler residuals
-                doppler_residuals,weight_for_doppler = self.compute_residuals_1(state, times, prnlist, ephemeris, doppler_obs, subset_snr)
+                doppler_residuals,weight_for_doppler = self.compute_residuals_1(state, times, week, prnlist, ephemeris, doppler_obs, subset_snr)
                 # Apply height constraint if present
                 if self.height_constraint is not None:
                     # Current height
@@ -520,7 +520,7 @@ class SingleSatDopplerPositioning:
                 for i in range(n_obs):
                     if prnlist[i]==0:
                         continue
-                    sat_pos,sat_vel = cal_sat_posvel(times[i],prnlist[i],ephemeris,position)
+                    sat_pos,sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i],ephemeris,position)
                     
                     # Line-of-sight
                     los = position - sat_pos
@@ -773,7 +773,7 @@ class SingleSatDopplerPositioning:
         
         return residuals, weights
 
-    def compute_residuals(self, state, times, prnlist, eph, doppler_obs, snr_values=None):
+    def compute_residuals(self, state, times, week, prnlist, eph, doppler_obs, snr_values=None):
         """
         CalculateDoppler残差, consideringall误差源
         """
@@ -787,7 +787,7 @@ class SingleSatDopplerPositioning:
             # Calculatesatelliteposition和velocity
             if prnlist[i]==0:
                 continue
-            sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], eph, position)
+            sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], eph, position)
             los = position - sat_pos
             range_ = np.linalg.norm(los)
             los_unit = los / range_
@@ -796,12 +796,12 @@ class SingleSatDopplerPositioning:
 
             # 1. Calculateatmospheric effect
             if self.enable_tropo:
-                trop_delay = self.compute_tropospheric_delay_rate(times[i], prnlist[i], eph, position, h, 0.005)
+                trop_delay = self.compute_tropospheric_delay_rate(times[i], week[i], prnlist[i], eph, position, h, 0.005)
             else:
                 trop_delay = 0.0
 
             if self.enable_iono:
-                iono_delay = self.compute_ionospheric_delay_rate(times[i], prnlist[i], eph, position, h, 0.1)
+                iono_delay = self.compute_ionospheric_delay_rate(times[i], week[i], prnlist[i], eph, position, h, 0.1)
             else:
                 iono_delay = 0.0
 
@@ -879,7 +879,7 @@ class SingleSatDopplerPositioning:
         
         return np.array(residuals),np.array(weights_for_doppler)
     
-    def compute_residuals_1(self, state, times, prnlist, eph, doppler_obs, snr_values=None):
+    def compute_residuals_1(self, state, times, week, prnlist, eph, doppler_obs, snr_values=None):
         """
         CalculateDoppler残差, consideringall误差源
         """
@@ -893,7 +893,7 @@ class SingleSatDopplerPositioning:
             # Calculatesatelliteposition和velocity
             if prnlist[i]==0:
                 continue
-            sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], eph, position)
+            sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], eph, position)
             los = position - sat_pos
             range_ = np.linalg.norm(los)
             los_unit = los / range_
@@ -902,12 +902,12 @@ class SingleSatDopplerPositioning:
 
             # 1. Calculateatmospheric effect
             if self.enable_tropo:
-                trop_delay = self.compute_tropospheric_delay_rate(times[i], prnlist[i], eph, position, h, 0.005)
+                trop_delay = self.compute_tropospheric_delay_rate(times[i],week[i], prnlist[i], eph, position, h, 0.005)
             else:
                 trop_delay = 0.0
 
             if self.enable_iono:
-                iono_delay = self.compute_ionospheric_delay_rate(times[i], prnlist[i], eph, position, h, 0.1)
+                iono_delay = self.compute_ionospheric_delay_rate(times[i],week[i], prnlist[i], eph, position, h, 0.1)
             else:
                 iono_delay = 0.0
 
@@ -985,7 +985,7 @@ class SingleSatDopplerPositioning:
         
         return np.array(residuals),np.array(weights_for_doppler)
 
-    def compute_tropospheric_delay_rate(self, time, prn, eph, recpos, height, delt):
+    def compute_tropospheric_delay_rate(self, time, week, prn, eph, recpos, height, delt):
         """
         Calculatetropospheredelayrate of change
         """
@@ -994,8 +994,8 @@ class SingleSatDopplerPositioning:
         time_latter = time + delt
         rec_lat, rec_lon, rec_alt = ecef_to_geodetic(*recpos)
 
-        sat_pos_former, sat_vel_former = cal_sat_posvel(time_former, prn, eph, recpos)
-        sat_pos_latter, sat_vel_latter = cal_sat_posvel(time_latter, prn, eph, recpos)
+        sat_pos_former, sat_vel_former = cal_sat_posvel(time_former, week, prn, eph, recpos)
+        sat_pos_latter, sat_vel_latter = cal_sat_posvel(time_latter, week, prn, eph, recpos)
 
         # Calculateelevation和azimuth
         elevation_former,__ = calculate_elevation_angle(sat_pos_former, recpos)
@@ -1052,7 +1052,7 @@ class SingleSatDopplerPositioning:
         # Returnstotaldelay
         return trph + trpw
     
-    def compute_ionospheric_delay_rate(self, time, prn, eph, recpos, height, delt):
+    def compute_ionospheric_delay_rate(self, time, week, prn, eph, recpos, height, delt):
         """
         Calculateionospheredelayrate of change
         """
@@ -1061,8 +1061,8 @@ class SingleSatDopplerPositioning:
         time_latter = time + delt
         rec_lat, rec_lon, rec_alt = ecef_to_geodetic(*recpos)
 
-        sat_pos_former, sat_vel_former = cal_sat_posvel(time_former, prn, eph, recpos)
-        sat_pos_latter, sat_vel_latter = cal_sat_posvel(time_latter, prn, eph, recpos)
+        sat_pos_former, sat_vel_former = cal_sat_posvel(time_former, week, prn, eph, recpos)
+        sat_pos_latter, sat_vel_latter = cal_sat_posvel(time_latter, week, prn, eph, recpos)
 
         # Calculateelevation和azimuth
         azel_former = calculate_elevation_angle(sat_pos_former, recpos)
@@ -1285,15 +1285,15 @@ class SingleSatDopplerPositioning:
         
     #     return base_delay * F_L1
 
-    def compute_atmospheric_effects(self, time, prn, eph, recpos, height, delt):
+    def compute_atmospheric_effects(self, time, week, prn, eph, recpos, height, delt):
         """
         Calculateatmospheric effecttotal影响
         """
         # Calculatetropospheredelay
-        trop_delay = self.compute_tropospheric_delay_rate(time, prn, eph, recpos, height, delt)
+        trop_delay = self.compute_tropospheric_delay_rate(time, week, prn, eph, recpos, height, delt)
         
         # Calculateionospheredelay
-        iono_delay = self.compute_ionospheric_delay_rate(time, prn, eph, recpos, height, 0.1)
+        iono_delay = self.compute_ionospheric_delay_rate(time, week, prn, eph, recpos, height, 0.1)
         iono_delay = 0.0
         # Calculatetotal大气delayrate of change
         total_delay_rate = trop_delay + iono_delay
@@ -1304,7 +1304,7 @@ class SingleSatDopplerPositioning:
         return atmos_doppler, trop_delay, iono_delay
 
 
-    def compute_residuals_pseudorange(self, state, times, prnlist, eph, pseudorange_obs, snr_values=None):
+    def compute_residuals_pseudorange(self, state, times, week, prnlist, eph, pseudorange_obs, snr_values=None):
         """
         Calculatepseudorange残差, consideringall误差源
         """
@@ -1319,7 +1319,7 @@ class SingleSatDopplerPositioning:
             # Calculatesatelliteposition和velocity
             if prnlist[i]==0:
                 continue
-            sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], eph, position)
+            sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], eph, position)
             los = position - sat_pos
             range_ = np.linalg.norm(los)
             los_unit = los / range_
@@ -1413,7 +1413,7 @@ class SingleSatDopplerPositioning:
         
         return np.array(pr_residuals), np.array(weights_for_pr)
 
-    def batch_least_squares_with_pseudorange(self, times, prnlist, ephemeris, pseudorange_obs, doppler_obs=None, subset_snr=None, init_pos=None, use_doppler=False):
+    def batch_least_squares_with_pseudorange(self, times,week, prnlist, ephemeris, pseudorange_obs, doppler_obs=None, subset_snr=None, init_pos=None, use_doppler=False):
         """usingpseudorange(optional配合Doppler)估计receiverposition、clock bias和clock drift, usingHVCE优化权重"""
         
         # Getinitial状态
@@ -1473,13 +1473,13 @@ class SingleSatDopplerPositioning:
                 
                 # Calculatepseudorange残差
                 pr_residuals, pr_weights_detailed = self.compute_residuals_pseudorange(
-                    state, times, prnlist, ephemeris, pseudorange_obs, subset_snr)
+                    state, times,week, prnlist, ephemeris, pseudorange_obs, subset_snr)
                          
                 # if同时usingDopplerobservation
                 if use_doppler and doppler_obs is not None:
                     # CalculateDoppler观测残差
                     doppler_residuals, dop_weights_detailed = self.compute_residuals(
-                        state, times, prnlist, ephemeris, doppler_obs, subset_snr)
+                        state, times,week, prnlist, ephemeris, doppler_obs, subset_snr)
 
                     # for i in range(len(pr_weights)):
                     # # 应用pseudorange权重因子
@@ -1548,7 +1548,7 @@ class SingleSatDopplerPositioning:
                         continue
                     
                     # Calculatesatelliteposition和velocity
-                    sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], ephemeris, position)
+                    sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], ephemeris, position)
                     
                     # Calculateline of sightvector
                     los = position - sat_pos
@@ -1573,7 +1573,7 @@ class SingleSatDopplerPositioning:
                         if prnlist[i] == 0:
                             continue
                         
-                        sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], ephemeris, position)
+                        sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], ephemeris, position)
                         
                         # Calculateline of sightvector
                         los = position - sat_pos
@@ -1642,11 +1642,11 @@ class SingleSatDopplerPositioning:
             # Calculatepseudorange和Doppler残差
             position = estimated_state[:3]
             pr_residuals, pr_weights_detailed = self.compute_residuals_pseudorange(
-                estimated_state, times, prnlist, ephemeris, pseudorange_obs, subset_snr)
+                estimated_state, times, week, prnlist, ephemeris, pseudorange_obs, subset_snr)
             
             if use_doppler and doppler_obs is not None:
                 dop_residuals, dop_weights_detailed = self.compute_residuals(
-                    estimated_state, times, prnlist, ephemeris, doppler_obs, subset_snr)
+                    estimated_state, times, week, prnlist, ephemeris, doppler_obs, subset_snr)
 
                 all_residuals = np.concatenate([pr_residuals, dop_residuals])
             else:
@@ -1915,7 +1915,7 @@ class SingleSatDopplerPositioning:
         
         return estimated_position, estimated_clock_bias, estimated_clock_drift, cov, pr_residuals_final,self.hvce_history
 
-    def grid_search_initialization(self, times, prnlist, ephemeris, doppler_obs, init_pos):
+    def grid_search_initialization(self, times, week, prnlist, ephemeris, doppler_obs, init_pos):
         """using网格搜索找到更好initialposition
         
         Args:
@@ -1958,7 +1958,7 @@ class SingleSatDopplerPositioning:
                     
                     for i in range(len(times)):
                         # Calculatesatelliteposition和velocity
-                        sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], ephemeris, test_pos)
+                        sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], ephemeris, test_pos)
                         
                         # Calculateelevation angle
                         elevation = calculate_elevation_angle(sat_pos, test_pos)
@@ -2003,7 +2003,7 @@ class SingleSatDopplerPositioning:
         
         return best_pos
 
-    def _compute_pseudorange_jacobian(self, state, times, prnlist, ephemeris):
+    def _compute_pseudorange_jacobian(self, state, times,week, prnlist, ephemeris):
         """Calculatepseudorange观测雅可比matrix"""
         position = state[:3]
         n_params = len(state)  # 5参数: x,y,z,钟差,钟漂
@@ -2015,7 +2015,7 @@ class SingleSatDopplerPositioning:
             if prnlist[i] == 0:
                 continue
                 
-            sat_pos, _ = cal_sat_posvel(times[i], prnlist[i], ephemeris, position)
+            sat_pos, _ = cal_sat_posvel(times[i], week[i], prnlist[i], ephemeris, position)
             
             # Calculateline of sightvector
             los = position - sat_pos
@@ -2035,7 +2035,7 @@ class SingleSatDopplerPositioning:
         
         return jacobian
 
-    def _compute_doppler_jacobian(self, state, times, prnlist, ephemeris):
+    def _compute_doppler_jacobian(self, state, times,week, prnlist, ephemeris):
         """CalculateDoppler观测雅可比matrix"""
         position = state[:3]
         n_params = len(state)  # 5参数: x,y,z,钟差,钟漂
@@ -2047,7 +2047,7 @@ class SingleSatDopplerPositioning:
             if prnlist[i] == 0:
                 continue
                 
-            sat_pos, sat_vel = cal_sat_posvel(times[i], prnlist[i], ephemeris, position)
+            sat_pos, sat_vel = cal_sat_posvel(times[i], week[i], prnlist[i], ephemeris, position)
             
             # Calculateline of sightvector
             los = position - sat_pos
@@ -2266,8 +2266,8 @@ def load_sim_data(filename, nav_file=None, ephemeris=None, tle_file=None):
         # df = pd.read_csv(filename, delimiter=r'\s+', skiprows=2, 
         #                 names=['gps_time', 'pseudorange', 'carrier_phase', 'doppler', 'elevation', 'prn'])
         df = pd.read_csv(filename, delimiter=r'\s+', skiprows=0,
-                        usecols=[2,3,4,5,6,11],  # 选择第4列(gps_time),5列(pseudorange),6列(doppler)和最后一列(prn)
-                        names=['gps_time','rece_time', 'pseudorange', 'doppler', 'snr', 'prn'])
+                        usecols=[2,3,4,5,6,7,9],  
+                        names=['gps_time','week','rece_time', 'pseudorange', 'doppler', 'snr', 'prn'])
     except Exception as e:
         print(f"无法读取文件: {filename}")
         print(f"错误: {e}")
@@ -2345,38 +2345,12 @@ def load_sim_data(filename, nav_file=None, ephemeris=None, tle_file=None):
     else:
     # usingdefaultephemeris
         ephemeris = {}  # 按PRN和toc存储星历字典
-        current_prn = None
-        current_toc = None
-        current_eph = {
-            'toc': 437100,  # 参考时间(GPS周内秒)
-            'sqrta': 2738.2328242865,  # 轨道半长轴平方根(m^0.5), 对应1100km高度
-            'es': 0.0021833032,  # 偏心率
-            'inc0': 1.5097466027,  # 轨道倾角(rad)
-            'omega0': -0.4934195498,  # 升交点赤经(rad)
-            'omega': 1.3370709787,  # 近地点角距(rad)
-            'm0': 0.9666686747,  # 平近点角(rad)
-            'dotn': -0.0000002690,  # 平均运动差值(rad/s)
-            'idot': -0.0000000076,  # 轨道倾角变化率(rad/s)
-            'omegadot': -0.0000000705,  # 升交点赤经变化率(rad/s)
-            'cuc': 0.0000007841,  # 纬度幅余弦调和修正项(rad)
-            'cus': 0.0000984017,  # 纬度幅正弦调和修正项(rad)
-            'crc': 1466.5468750000,  # 轨道半径余弦调和修正项(m)
-            'crs':28.1484375000,  # 轨道半径正弦调和修正项(m)
-            'cic': -0.0000007081,  # 轨道倾角余弦调和修正项(rad)
-            'cis': 0.0000011557,  # 轨道倾角正弦调和修正项(rad)
-            'af0': 0.0,  # 卫星钟偏差(秒)
-            'af1': 0.0,  # 卫星钟漂(秒/秒)
-            'af2': 0.0,  # 卫星钟漂变化(秒/秒^2)
-            'tgd1': 0.0,  # 卫星钟偏差(秒)
-        }
-        current_toc = 437100.0
-        current_prn = 24
-        ephemeris[current_prn]={}
-        ephemeris[current_prn][current_toc] = current_eph
+        
  
     times = df['gps_time'].values   
     data = {
         'times': times,
+        'week': df['week'].values,
         'doppler': df['doppler'].values,
         'rece_time': df['rece_time'].values,
         'pseudorange': df['pseudorange'].values,
@@ -2391,12 +2365,13 @@ def load_sim_data(filename, nav_file=None, ephemeris=None, tle_file=None):
     
     return data,ephemeris
 
-def cal_sat_posvel(time,prn,ephemeris,rec_pos):
+def cal_sat_posvel(time, week, prn, ephemeris,rec_pos):
     """
     Calculatesatelliteposition和velocity
     
     Args:
         time: 观测时间column表
+        week: 观测周数column表
         prn: satellitePRN号column表
         ephemeris: ephemeris字典
         rec_pos: receiverposition(ECEF坐标)
@@ -2411,7 +2386,7 @@ def cal_sat_posvel(time,prn,ephemeris,rec_pos):
     c = SPEED_OF_LIGHT  # 光速(m/s)
 
     if Tle_sat_pos:
-        return calculate_satellite_position_tle(prn, gps_week,time)
+        return calculate_satellite_position_tle(prn, week,time)
     else:
         current_prn = prn  
         # Get该PRNsatelliteephemeris
@@ -2548,6 +2523,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
     
     # Read观测data
     times = data['times']
+    week = data['week']
     rece_time = data['rece_time']
     prn_list = data['prn']
     pseudorange_obs = data['pseudorange'] if use_pseudorange else None
@@ -2560,6 +2536,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
         mask = np.array([str(prn) in selected_set for prn in prn_list])
         
         times = np.array(times)[mask].tolist()
+        week = np.array(week)[mask].tolist()
         rece_time = np.array(rece_time)[mask].tolist()
         prn_list = np.array(prn_list)[mask].tolist()
         if pseudorange_obs is not None:
@@ -2571,6 +2548,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
         
         # Updatedata字典以便后续using
         data['times'] = times
+        data['week'] = week
         data['rece_time'] = rece_time
         data['prn'] = prn_list
         if use_pseudorange:
@@ -2633,7 +2611,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
     obs_steps = []
     
     # 前100点以10点为步长
-    for i in range(100, min(200, total_obs), 20):
+    for i in range(50, min(200, total_obs), 20):
         obs_steps.append(i)
     
     # 前100点以10点为步长
@@ -2679,6 +2657,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
         
         # 截取前obs_countobservation
         subset_times = np.asarray(data['times'][:obs_count])
+        subset_week = np.asarray(data['week'][:obs_count])
         subset_prn = np.asarray(data['prn'][:obs_count])
         subset_snr = np.asarray(data['snr'][:obs_count]) if 'snr' in data else None
         
@@ -2688,6 +2667,7 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
 
         # update "last" references for plotting later
         last_subset_times = subset_times
+        last_subset_week = subset_week
         last_subset_prn = subset_prn
         last_subset_snr = subset_snr
         last_subset_pr = subset_pr
@@ -2699,14 +2679,14 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
             if use_pseudorange:
                 # usingpseudorange进linepositioning
                 position, clock_bias, clock_drift, cov, residuals,hvce_history = positioning.batch_least_squares_with_pseudorange(
-                    subset_times, subset_prn, ephemeris, subset_pr, 
+                    subset_times, subset_week, subset_prn, ephemeris, subset_pr, 
                     subset_doppler if use_doppler else None, 
                     subset_snr, init_pos, use_doppler
                 )
             else:
                 # 仅usingDoppler进linepositioning
                 result = positioning.batch_least_squares_position_only(
-                    subset_times, subset_prn, ephemeris, subset_doppler, subset_snr, init_pos=init_pos
+                    subset_times, subset_week, subset_prn, ephemeris, subset_doppler, subset_snr, init_pos=init_pos
                 )
                 
                 # CheckReturns值数量
@@ -2847,18 +2827,20 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
         try:
             if last_subset_times is not None and last_subset_prn is not None:
                 times_arr = np.asarray(last_subset_times, dtype=float)
+                week_arr = np.asarray(last_subset_week, dtype=int)
                 prn_arr = np.asarray(last_subset_prn)
                 valid_mask = prn_arr != 0
 
                 times_valid = times_arr[valid_mask]
+                week_valid = week_arr[valid_mask]
                 prn_valid = prn_arr[valid_mask].astype(int)
 
                 # Sky plot (az/el) based on final estimated receiver position
                 rec_pos = np.asarray(positioning.state[:3], dtype=float)
                 sky_el = []
                 sky_az = []
-                for t, prn in zip(times_valid, prn_valid):
-                    sat_pos, _sat_vel = cal_sat_posvel(float(t), int(prn), ephemeris, rec_pos)
+                for t, w, prn in zip(times_valid,week_valid, prn_valid):
+                    sat_pos, _sat_vel = cal_sat_posvel(float(t), w, int(prn), ephemeris, rec_pos)
                     el_deg, az_deg = calculate_elevation_angle(sat_pos, rec_pos)
                     sky_el.append(float(el_deg))
                     sky_az.append(float(az_deg))
@@ -2870,19 +2852,19 @@ def run_lsq_positioning(sim_data_file, ephemeris_file=None, tle_file=None, init_
                 if use_pseudorange and last_subset_pr is not None:
                     state5 = np.array([rec_pos[0], rec_pos[1], rec_pos[2], float(last_clock_bias), float(last_clock_drift)])
                     pr_res, _ = positioning.compute_residuals_pseudorange(
-                        state5, times_arr, prn_arr, ephemeris, last_subset_pr, last_subset_snr
+                        state5, times_arr, week_arr, prn_arr, ephemeris, last_subset_pr, last_subset_snr
                     )
 
                 if use_doppler and last_subset_doppler is not None:
                     if use_pseudorange:
                         state5 = np.array([rec_pos[0], rec_pos[1], rec_pos[2], float(last_clock_bias), float(last_clock_drift)])
                         dop_res, _ = positioning.compute_residuals(
-                            state5, times_arr, prn_arr, ephemeris, last_subset_doppler, last_subset_snr
+                            state5, times_arr, week_arr, prn_arr, ephemeris, last_subset_doppler, last_subset_snr
                         )
                     else:
                         state4 = np.array([rec_pos[0], rec_pos[1], rec_pos[2], float(last_clock_drift)])
                         dop_res, _ = positioning.compute_residuals_1(
-                            state4, times_arr, prn_arr, ephemeris, last_subset_doppler, last_subset_snr
+                            state4, times_arr, week_arr, prn_arr, ephemeris, last_subset_doppler, last_subset_snr
                         )
 
                 # Store arrays for GUI consumption (keep as plain lists to cross thread safely)

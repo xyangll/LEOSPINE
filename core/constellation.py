@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 
 MU_EARTH = 3.986004418e14
 
+
 def _doy_fraction(dt):
+    """Calculate day of year with fractional portion."""
     year = dt.year
     start = datetime(year, 1, 1, tzinfo=timezone.utc)
     delta = dt - start
@@ -11,43 +13,100 @@ def _doy_fraction(dt):
     frac = (delta.seconds + delta.microseconds / 1e6) / 86400.0
     return doy + frac
 
-def _format_bstar(value):
-    if not value:
-        return "00000-0"
-    s = f"{value:.5e}"
-    mantissa, exp = s.split("e")
-    exp_int = int(exp)
-    m = mantissa.replace(".", "")
-    if len(m) < 5:
-        m = (m + "00000")[:5]
-    else:
-        m = m[:5]
-    sign = "+" if exp_int >= 0 else "-"
-    exp_abs = f"{abs(exp_int):02d}"
-    return f"{m}{sign}{exp_abs}"
 
-def _format_eccentricity(e):
-    s = f"{e:.7f}".split(".")[1]
-    return s
-
-def _checksum(line):
+def _tle_checksum(line):
+    """
+    Calculate TLE checksum (modulo 10).
+    Sum all digits, count '-' as 1, ignore all other characters.
+    """
     total = 0
-    for ch in line[:-1]:
+    for ch in line:
         if ch.isdigit():
             total += int(ch)
         elif ch == '-':
             total += 1
-    return str(total % 10)
+    return total % 10
 
-def _wrap_field(val, width, decimals=None):
-    if decimals is None:
-        s = f"{val:>{width}}"
+
+def _format_tle_exp(value):
+    """
+    Format a value in TLE exponential notation (8 characters total).
+    Format: ±NNNNN±N (e.g., " 00000-0", "-12345-6", " 12345+0")
+    
+    Standard TLE exponential format:
+    - Position 1: sign (' ' for positive, '-' for negative)
+    - Positions 2-6: 5-digit mantissa (leading decimal assumed, e.g., .12345)
+    - Position 7: exponent sign ('+' or '-')
+    - Position 8: exponent magnitude (single digit)
+    """
+    if value == 0 or value is None:
+        return " 00000-0"
+    
+    # Determine sign
+    sign = ' ' if value >= 0 else '-'
+    abs_val = abs(value)
+    
+    # Convert to scientific notation to get exponent
+    if abs_val != 0:
+        exp = math.floor(math.log10(abs_val))
     else:
-        s = f"{val:>{width}.{decimals}f}"
-    return s
+        exp = 0
+    
+    # Normalize mantissa to be between 0.1 and 1.0
+    # TLE format assumes leading decimal (e.g., .12345 = 0.12345)
+    mantissa = abs_val / (10 ** exp)
+    
+    # Adjust so mantissa is in form 0.NNNNN (between 0.1 and 1)
+    if mantissa >= 1:
+        mantissa /= 10
+        exp += 1
+    
+    # Format mantissa as 5 digits (remove leading "0.")
+    mantissa_int = int(round(mantissa * 100000))
+    mantissa_str = f"{mantissa_int:05d}"
+    
+    # Format exponent (single digit with sign)
+    exp_sign = '+' if exp >= 0 else '-'
+    exp_digit = abs(exp) % 10  # Single digit
+    
+    return f"{sign}{mantissa_str}{exp_sign}{exp_digit}"
+
+
+def _format_tle_first_deriv(value):
+    """
+    Format first time derivative of mean motion (ndot/2) for TLE Line 1.
+    Format: 10 characters total including sign and decimal point.
+    Standard format: ±.NNNNNNNN (e.g., " .00000000", "-.00012345")
+    Columns 34-43 in TLE Line 1.
+    """
+    if value == 0 or value is None:
+        return " .00000000"
+    
+    sign = ' ' if value >= 0 else '-'
+    # Format: ±.NNNNNNNN (8 decimal places after the decimal point)
+    formatted = f"{abs(value):.8f}"
+    # Remove leading zero before decimal
+    if formatted.startswith('0'):
+        formatted = formatted[1:]
+    return f"{sign}{formatted}"
+
+
+def _format_eccentricity(e):
+    """
+    Format eccentricity for TLE Line 2 (7 characters).
+    Leading decimal point is assumed, so we just output 7 digits.
+    E.g., 0.0001234 -> "0001234"
+    """
+    # Multiply by 10^7 and format as 7 digits
+    ecc_int = int(round(e * 10000000))
+    return f"{ecc_int:07d}"
+
 
 def generate_walker_delta_tles(name_prefix, a_m, e, inc_deg, raan0_deg, argp_deg, mean_anomaly0_deg, epoch_dt, planes, sats_per_plane, phasing, bstar=0.0, catalog_start=80000, raan_spread=360.0):
-    """Generate TLE data for Walker-Delta constellation.
+    """
+    Generate TLE data for Walker-Delta constellation.
+    
+    Strictly follows standard TLE format (69 characters per line).
     
     Walker-Delta T/P/F notation:
         T = total satellites = planes * sats_per_plane
@@ -60,16 +119,16 @@ def generate_walker_delta_tles(name_prefix, a_m, e, inc_deg, raan0_deg, argp_deg
     
     Args:
         raan_spread: Total RAAN angular spread in degrees (default 360° for full coverage).
-                     Use smaller values (e.g., 180°) to concentrate planes in a sector.
-    
-    This follows STK convention for Walker constellations.
     """
+    # Calculate mean motion in revolutions per day
     n_rad_s = math.sqrt(MU_EARTH / (a_m ** 3))
     n_rev_day = n_rad_s * 86400.0 / (2.0 * math.pi)
+    
+    # Epoch formatting
     epoch_year = epoch_dt.year % 100
     epoch_doy = _doy_fraction(epoch_dt)
-    name_lines = []
     
+    name_lines = []
     total_sats = planes * sats_per_plane
     
     for p in range(planes):
@@ -81,43 +140,195 @@ def generate_walker_delta_tles(name_prefix, a_m, e, inc_deg, raan0_deg, argp_deg
             cat = catalog_start + prn
             
             # Walker-Delta phasing formula (STK compatible):
-            # In-plane spacing: 360° * s / S
-            # Inter-plane phasing: 360° * p * F / T  (where T = P * S)
             in_plane_phase = 360.0 * s / sats_per_plane
             inter_plane_phase = 360.0 * p * phasing / total_sats
             phase = (in_plane_phase + inter_plane_phase) % 360.0
-            
             mean_anomaly = (mean_anomaly0_deg + phase) % 360.0
-            epoch_str = f"{epoch_year:02d}{epoch_doy:012.8f}"
-            mm_dot = "  .00000000"
-            mm_ddot = "  .00000-0"
-            bstar_field = _format_bstar(bstar)
-            elset = "00000"
-            line1_body = (
-                f"1 {cat:5d}U 00000A   {epoch_str} {mm_dot} {mm_ddot}  {bstar_field} 0 {elset}"
-            )
-            line1 = line1_body[:68] + _checksum(line1_body + " ")
-            ecc_field = _format_eccentricity(e)
-            inc_field = f"{inc_deg:8.4f}"
-            raan_field = f"{raan:8.4f}"
-            argp_field = f"{argp_deg:8.4f}"
-            ma_field = f"{mean_anomaly:8.4f}"
-            n_field = f"{n_rev_day:11.8f}"
-            revnum = f"{0:5d}"
-            line2_body = (
-                f"2 {cat:5d} {inc_field} {raan_field} {ecc_field:7s} {argp_field} {ma_field} {n_field} {revnum}"
-            )
-            line2 = line2_body[:68] + _checksum(line2_body + " ")
+            
+            # Generate TLE Line 1 and Line 2
+            line1 = _build_tle_line1(cat, epoch_year, epoch_doy, bstar)
+            line2 = _build_tle_line2(cat, inc_deg, raan, e, argp_deg, mean_anomaly, n_rev_day)
+            
             name = f"{name_prefix}-{prn:03d}"
             name_lines.append((name, line1, line2))
+    
     return name_lines
 
+
+def _build_tle_line1(catalog_num, epoch_year, epoch_doy, bstar, 
+                     classification='U', intl_desig='00001A  ',
+                     ndot=0.0, nddot=0.0, ephemeris_type=0, element_set=999):
+    """
+    Build TLE Line 1 strictly following the standard format.
+    
+    TLE Line 1 Format (69 characters):
+    Col  Description
+    ---  -----------
+    01   Line number (1)
+    02   Space
+    03-07  Catalog number (5 digits)
+    08   Classification (U/C/S)
+    09   Space
+    10-17  International designator (8 chars: YYNNNPPP)
+    18   Space
+    19-20  Epoch year (2 digits)
+    21-32  Epoch day of year (DDD.DDDDDDDD, 12 chars)
+    33   Space
+    34-43  First derivative of mean motion / 2 (10 chars)
+    44   Space
+    45-52  Second derivative of mean motion / 6 (8 chars)
+    53   Space
+    54-61  BSTAR drag term (8 chars)
+    62   Space
+    63   Ephemeris type (single digit)
+    64   Space
+    65-68  Element set number (4 digits)
+    69   Checksum
+    """
+    # Format each field according to TLE specification
+    line_num = '1'
+    cat_str = f"{catalog_num:5d}"
+    
+    # Ensure international designator is 8 characters
+    intl_str = f"{intl_desig:<8s}"[:8]
+    
+    # Epoch: 2-digit year + 12-character day of year (DDD.DDDDDDDD)
+    epoch_str = f"{epoch_year:02d}{epoch_doy:012.8f}"
+    
+    # First derivative of mean motion (10 chars)
+    ndot_str = _format_tle_first_deriv(ndot)
+    
+    # Second derivative of mean motion (8 chars, exponential format)
+    nddot_str = _format_tle_exp(nddot)
+    
+    # BSTAR drag term (8 chars, exponential format)
+    bstar_str = _format_tle_exp(bstar)
+    
+    # Ephemeris type (single digit)
+    eph_str = str(ephemeris_type % 10)
+    
+    # Element set number (4 digits, right-justified with leading spaces)
+    elset_str = f"{element_set:4d}"
+    
+    # Build line without checksum (68 characters)
+    # Format: "1 NNNNNC NNNNNNNN YYEEEEEEEEE.EEEE ±.DDDDDDDD ±NNNNN±N ±NNNNN±N E NNNN"
+    line_body = (
+        f"{line_num} "           # Col 1-2: "1 "
+        f"{cat_str}"             # Col 3-7: catalog number
+        f"{classification}"      # Col 8: classification
+        f" "                     # Col 9: space
+        f"{intl_str}"            # Col 10-17: international designator
+        f" "                     # Col 18: space
+        f"{epoch_str}"           # Col 19-32: epoch (14 chars)
+        f" "                     # Col 33: space
+        f"{ndot_str}"            # Col 34-43: ndot/2 (10 chars)
+        f" "                     # Col 44: space
+        f"{nddot_str}"           # Col 45-52: nddot/6 (8 chars)
+        f" "                     # Col 53: space
+        f"{bstar_str}"           # Col 54-61: BSTAR (8 chars)
+        f" "                     # Col 62: space
+        f"{eph_str}"             # Col 63: ephemeris type
+        f" "                     # Col 64: space
+        f"{elset_str}"           # Col 65-68: element set number (4 chars)
+    )
+    
+    # Ensure exactly 68 characters before checksum
+    line_body = line_body[:68].ljust(68)
+    
+    # Calculate and append checksum
+    checksum = _tle_checksum(line_body)
+    
+    return line_body + str(checksum)
+
+
+def _build_tle_line2(catalog_num, inc_deg, raan_deg, ecc, argp_deg, ma_deg, 
+                     mean_motion, rev_num=0):
+    """
+    Build TLE Line 2 strictly following the standard format.
+    
+    TLE Line 2 Format (69 characters):
+    Col  Description
+    ---  -----------
+    01   Line number (2)
+    02   Space
+    03-07  Catalog number (5 digits)
+    08   Space
+    09-16  Inclination (degrees, 8 chars: NNN.NNNN)
+    17   Space
+    18-25  RAAN (degrees, 8 chars: NNN.NNNN)
+    26   Space
+    27-33  Eccentricity (7 digits, decimal point assumed)
+    34   Space
+    35-42  Argument of perigee (degrees, 8 chars: NNN.NNNN)
+    43   Space
+    44-51  Mean anomaly (degrees, 8 chars: NNN.NNNN)
+    52   Space
+    53-63  Mean motion (rev/day, 11 chars: NN.NNNNNNNN)
+    64-68  Revolution number (5 digits)
+    69   Checksum
+    """
+    line_num = '2'
+    cat_str = f"{catalog_num:5d}"
+    
+    # Angular values: 8 characters with 4 decimal places (NNN.NNNN format)
+    inc_str = f"{inc_deg:8.4f}"
+    raan_str = f"{raan_deg:8.4f}"
+    argp_str = f"{argp_deg:8.4f}"
+    ma_str = f"{ma_deg:8.4f}"
+    
+    # Eccentricity: 7 digits (decimal point assumed)
+    ecc_str = _format_eccentricity(ecc)
+    
+    # Mean motion: 11 characters with 8 decimal places (NN.NNNNNNNN format)
+    mm_str = f"{mean_motion:11.8f}"
+    
+    # Revolution number: 5 digits
+    rev_str = f"{rev_num:5d}"
+    
+    # Build line without checksum (68 characters)
+    line_body = (
+        f"{line_num} "           # Col 1-2: "2 "
+        f"{cat_str}"             # Col 3-7: catalog number
+        f" "                     # Col 8: space
+        f"{inc_str}"             # Col 9-16: inclination (8 chars)
+        f" "                     # Col 17: space
+        f"{raan_str}"            # Col 18-25: RAAN (8 chars)
+        f" "                     # Col 26: space
+        f"{ecc_str}"             # Col 27-33: eccentricity (7 chars)
+        f" "                     # Col 34: space
+        f"{argp_str}"            # Col 35-42: argument of perigee (8 chars)
+        f" "                     # Col 43: space
+        f"{ma_str}"              # Col 44-51: mean anomaly (8 chars)
+        f" "                     # Col 52: space
+        f"{mm_str}"              # Col 53-63: mean motion (11 chars)
+        f"{rev_str}"             # Col 64-68: revolution number (5 chars)
+    )
+    
+    # Ensure exactly 68 characters before checksum
+    line_body = line_body[:68].ljust(68)
+    
+    # Calculate and append checksum
+    checksum = _tle_checksum(line_body)
+    
+    return line_body + str(checksum)
+
+
 def write_tle_file(path, name_lines):
+    """
+    Write TLE data to file in standard 3-line format.
+    Each satellite entry consists of:
+    - Line 0: Satellite name (up to 24 characters)
+    - Line 1: TLE line 1 (69 characters)
+    - Line 2: TLE line 2 (69 characters)
+    """
     with open(path, "w", encoding="utf-8") as f:
         for name, l1, l2 in name_lines:
-            f.write(name + "\n")
-            f.write(l1 + "\n")
-            f.write(l2 + "\n")
+            # Name line (Line 0): typically up to 24 characters
+            f.write(f"{name}\n")
+            # Line 1: must be exactly 69 characters
+            f.write(f"{l1}\n")
+            # Line 2: must be exactly 69 characters
+            f.write(f"{l2}\n")
 
 
 # ============================================================
