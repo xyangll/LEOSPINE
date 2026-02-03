@@ -3,13 +3,13 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QTabWidget, Q
     QRadioButton, QCheckBox, QGroupBox, QSizePolicy, QFrame, QSpacerItem, QScrollArea,
     QProgressBar, QDialog, QDialogButtonBox, QMessageBox)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtCore import QUrl, Qt, QThread, Signal, QObject
+from PySide6.QtCore import QUrl, Qt, QThread, Signal, QObject, QDateTime
 from PySide6.QtGui import QFont, QIcon, QPixmap
 import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from core.constellation import generate_walker_delta_tles, write_tle_file
 from core.sim_data import SatelliteSimulation
 from app.czml import write_czml
@@ -211,6 +211,16 @@ class ConstellationTab(QWidget):
         web_layout.setSpacing(4)
         web_layout.setContentsMargins(8, 4, 8, 4)
         
+        # Start time setting
+        start_time_row = QHBoxLayout()
+        start_time_row.addWidget(QLabel('Start'))
+        self.web_start_dt = QDateTimeEdit()
+        self.web_start_dt.setDisplayFormat('yyyy-MM-dd HH:mm')
+        self.web_start_dt.setDateTime(QDateTime.currentDateTimeUtc())
+        self.web_start_dt.setToolTip('Start time for 3D visualization (UTC)')
+        start_time_row.addWidget(self.web_start_dt, 1)
+        web_layout.addLayout(start_time_row)
+        
         time_row = QHBoxLayout()
         time_row.addWidget(QLabel('Duration'))
         self.web_duration = QLineEdit('10800')
@@ -290,7 +300,6 @@ class ConstellationTab(QWidget):
         vis_time_layout.setContentsMargins(0, 0, 0, 0)
         vis_time_layout.setSpacing(2)
         
-        from PySide6.QtCore import QDateTime
         start_row = QHBoxLayout()
         start_row.addWidget(QLabel('Start'))
         self.vis_start_dt = QDateTimeEdit()
@@ -506,8 +515,30 @@ class ConstellationTab(QWidget):
                 )
             else:
                 # Instant visibility at epoch
-                epoch_dt = datetime.strptime(self.epoch.text(), '%Y-%m-%d').replace(tzinfo=timezone.utc)
-                print(f"[Visibility] Instant mode at {epoch_dt}")
+                # Try to extract epoch from TLE data for more accurate analysis
+                epoch_dt = None
+                if tle_list and len(tle_list) > 0:
+                    try:
+                        # Extract epoch from first TLE's Line 1 (columns 18-32)
+                        first_tle_line1 = tle_list[0][1]
+                        epoch_year = int(first_tle_line1[18:20])
+                        epoch_day = float(first_tle_line1[20:32])
+                        # Convert 2-digit year to 4-digit
+                        if epoch_year >= 57:
+                            epoch_year += 1900
+                        else:
+                            epoch_year += 2000
+                        # Convert day of year to datetime
+                        epoch_dt = datetime(epoch_year, 1, 1, tzinfo=timezone.utc) + timedelta(days=epoch_day - 1)
+                        print(f"[Visibility] Using TLE epoch: {epoch_dt}")
+                    except Exception as e:
+                        print(f"[Visibility] Could not extract TLE epoch: {e}")
+                
+                # Fallback to GUI epoch if TLE extraction failed
+                if epoch_dt is None:
+                    epoch_dt = datetime.strptime(self.epoch.text(), '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                    print(f"[Visibility] Using GUI epoch: {epoch_dt}")
+                
                 print(f"[Visibility] TLE count: {len(tle_list)}, Resolution: {resolution}°, Elev mask: {elev_mask}°")
                 
                 result = compute_visibility_analysis(
@@ -773,7 +804,13 @@ class ConstellationTab(QWidget):
             tmp = get_web_data_path('temp.tle')
             write_tle_file(tmp, self.tle_data)
             tle = tmp
-        start_dt = datetime.utcnow()
+        
+        # Get start time from user input
+        qdt = self.web_start_dt.dateTime()
+        start_dt = datetime(qdt.date().year(), qdt.date().month(), qdt.date().day(),
+                           qdt.time().hour(), qdt.time().minute(), qdt.time().second(),
+                           tzinfo=timezone.utc)
+        
         duration_s = int(self.web_duration.text())
         step_s = int(self.web_step.text())
         out_czml = get_web_data_path('data.czml')

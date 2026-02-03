@@ -438,11 +438,9 @@ def propagate_satrec(satrec, dt):
             tle_epoch_jd = satrec.jdsatepoch + satrec.jdsatepochF
             prop_jd = jd + fr
             days_from_epoch = abs(prop_jd - tle_epoch_jd)
-            
-            # Allow up to 30 days from epoch (more lenient than typical 2 weeks)
-            if days_from_epoch > 30.0:
-                # Too far from epoch, likely to return NaN
-                return None
+            # Note: SGP4 predictions become less accurate over time, but for
+            # constellation design and visibility analysis, we allow any time range.
+            # The caller should be aware that accuracy degrades beyond ~2 weeks.
         except (AttributeError, TypeError):
             # If satrec doesn't have epoch info, proceed anyway
             # This shouldn't happen with valid Satrec objects, but handle gracefully

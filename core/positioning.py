@@ -24,7 +24,7 @@ F_L1 = 1.199169832000000e+09   # SPT frequency (Hz)
 LAMBDA_L1 = SPEED_OF_LIGHT / F_L1  # L1 wavelength (m)
 
 tle_satellites = {}  # Store TLE satellite objects
-gps_week=2377
+# gps_week=2377
 Tle_sat_pos = False   # Use TLE to compute satellite position/velocity
 global_sigma={'pr':[],'dop':[]}
 
