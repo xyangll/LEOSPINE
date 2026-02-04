@@ -49,7 +49,7 @@ A modern PySide6 GUI and CLI tools are provided. Cesium 3D visualization is inte
 
 | Constellation Design | Observation Simulation | Positioning |
 |:-------------------:|:---------------------:|:-----------:|
-| 3D orbit visualization with Cesium | Error model configuration | Skyplot and error plots |
+| ![Constellation](docs/images/constellation.png) | ![Simulation](docs/images/simulation.png) | ![Positioning](docs/images/positioning.png) |
 
 ---
 
